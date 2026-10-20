@@ -1,0 +1,92 @@
+using EasyClothes.Core.Importing;
+using EasyClothes.Core.Model;
+using EasyClothes.Core.Validation;
+
+namespace EasyClothes.Core.Tests;
+
+public sealed class ImporterTests : IDisposable
+{
+    private readonly string _root = Directory.CreateTempSubdirectory("easyclothes-").FullName;
+    private string Source => Path.Combine(_root, "source");
+    private string ProjectDir => Path.Combine(_root, "project");
+
+    public ImporterTests()
+    {
+        Directory.CreateDirectory(Source);
+        Directory.CreateDirectory(ProjectDir);
+    }
+
+    public void Dispose() => Directory.Delete(_root, recursive: true);
+
+    [Fact]
+    public void Imports_a_model_with_its_textures_in_letter_order()
+    {
+        var model = Touch("mp_m_freemode_01_mp_m_eup^jbib_040_u.ydd");
+        Touch("mp_m_freemode_01_mp_m_eup^jbib_diff_040_b_uni.ytd");
+        Touch("mp_m_freemode_01_mp_m_eup^jbib_diff_040_a_uni.ytd");
+        Touch("mp_m_freemode_01_mp_m_eup^jbib_diff_041_a_uni.ytd");
+        Touch("mp_f_freemode_01_mp_f_eup^jbib_diff_040_a_uni.ytd");
+        var project = NewProject();
+
+        var result = DrawableImporter.Import(project, ProjectDir, [model], PedGender.Female);
+
+        var drawable = Assert.Single(result.Added);
+        Assert.Empty(result.Warnings);
+        Assert.Equal(("jbib_040", PedGender.Male, ComponentSlot.Top), (drawable.Name, drawable.Gender, drawable.Component!.Value));
+        Assert.Equal(["a_uni", "b_uni"], drawable.Textures.Select(t => Path.GetFileNameWithoutExtension(t.TexturePath)[^5..]));
+        Assert.Empty(ProjectValidator.Validate(project, ProjectDir));
+    }
+
+    [Fact]
+    public void Uses_the_fallback_gender_and_dedupes_names()
+    {
+        var model = Touch("p_eyes_003.ydd");
+        Touch("p_eyes_diff_003_a.ytd");
+        var project = NewProject();
+
+        DrawableImporter.Import(project, ProjectDir, [model], PedGender.Female);
+        var second = DrawableImporter.Import(project, ProjectDir, [model], PedGender.Female);
+
+        Assert.Equal("p_eyes_003 (2)", second.Added[0].Name);
+        Assert.Equal(PropSlot.Glasses, second.Added[0].Prop);
+    }
+
+    [Fact]
+    public void Warns_about_unrecognised_names_and_missing_textures()
+    {
+        var unknown = Touch("jacket.ydd");
+        var lonely = Touch("feet_001_u.ydd");
+        var project = NewProject();
+
+        var result = DrawableImporter.Import(project, ProjectDir, [unknown, lonely], PedGender.Male);
+
+        Assert.Single(result.Added);
+        Assert.Equal(2, result.Warnings.Count);
+        Assert.Contains(ProjectValidator.Validate(project, ProjectDir), i => i.Message.Contains("no tiene texturas"));
+    }
+
+    [Fact]
+    public void Validator_reports_missing_files_and_bad_collection_names()
+    {
+        var project = new ClothingProject
+        {
+            Name = "x",
+            CollectionName = "Mi Pack",
+            Drawables = [new Drawable { Name = "a", Component = ComponentSlot.Top, ModelPath = "nope.ydd", Textures = [new() { TexturePath = "nope.ytd" }] }],
+        };
+
+        var issues = ProjectValidator.Validate(project, ProjectDir);
+
+        Assert.Equal(3, issues.Count);
+        Assert.All(issues, i => Assert.Equal(IssueSeverity.Error, i.Severity));
+    }
+
+    private ClothingProject NewProject() => new() { Name = "Test", CollectionName = "test" };
+
+    private string Touch(string name)
+    {
+        var path = Path.Combine(Source, name);
+        File.WriteAllBytes(path, []);
+        return path;
+    }
+}
