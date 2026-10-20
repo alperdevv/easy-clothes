@@ -65,6 +65,32 @@ public sealed class MainWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Building_reports_errors_then_writes_the_resource_once_fixed()
+    {
+        File.WriteAllText(Path.Combine(_dir, "a.ydd"), "");
+        var path = await SaveProject(new ClothingProject
+        {
+            Name = "UI",
+            CollectionName = "ui",
+            Drawables = [new Drawable { Name = "lowr_000", Component = ComponentSlot.Legs, ModelPath = "a.ydd" }],
+        });
+        var window = new MainWindow();
+        window.Show();
+        await window.ViewModel.OpenProjectFileAsync(path);
+        var output = Path.Combine(_dir, "resource");
+
+        await window.ViewModel.BuildResourceAsync(output);
+        Assert.Contains("1 error", window.ViewModel.Status);
+        Assert.False(Directory.Exists(output));
+
+        File.WriteAllText(Path.Combine(_dir, "a.ytd"), "");
+        window.ViewModel.Project!.Drawables[0].Textures.Add(new TextureVariation { TexturePath = "a.ytd" });
+        await window.ViewModel.BuildResourceAsync(output);
+        Assert.StartsWith("Recurso generado", window.ViewModel.Status);
+        Assert.True(File.Exists(Path.Combine(output, "stream", "mp_m_freemode_01_ui.ymt")));
+    }
+
+    [AvaloniaFact]
     public void Dragging_in_the_viewer_orbits_pans_and_double_click_recentres()
     {
         var window = new MainWindow { Width = 1200, Height = 800 };

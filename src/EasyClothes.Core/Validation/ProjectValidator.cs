@@ -1,5 +1,6 @@
 using EasyClothes.Core.Analysis;
 using EasyClothes.Core.Model;
+using EasyClothes.Core.Rage;
 
 namespace EasyClothes.Core.Validation;
 
@@ -39,6 +40,11 @@ public static class ProjectValidator
 
         foreach (var group in project.Drawables.GroupBy(d => (d.Gender, d.Name)).Where(g => g.Count() > 1))
             issues.Add(new(IssueSeverity.Warning, $"Hay {group.Count()} prendas llamadas {group.Key.Name} ({group.Key.Gender})."));
+
+        foreach (var group in project.Drawables.GroupBy(d => (d.Gender, d.Component, d.Prop)).Where(g => g.Count() > PedVariation.MaxDrawablesPerSlot))
+            issues.Add(new(IssueSeverity.Error, $"{group.Count()} prendas en el mismo hueco ({group.Key.Gender}); el máximo es {PedVariation.MaxDrawablesPerSlot}."));
+        if (project.Drawables.Where(d => d.IsProp).GroupBy(d => d.Gender).FirstOrDefault(g => g.Count() > PedVariation.MaxDrawablesPerSlot) is { } props)
+            issues.Add(new(IssueSeverity.Error, $"{props.Count()} props ({props.Key}); el máximo por sexo es {PedVariation.MaxDrawablesPerSlot}."));
 
         return issues;
     }

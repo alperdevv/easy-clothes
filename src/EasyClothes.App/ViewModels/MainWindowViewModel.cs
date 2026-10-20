@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EasyClothes.App.Services;
 using EasyClothes.Core.Analysis;
+using EasyClothes.Core.Export;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Projects;
@@ -17,7 +18,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     private int _validationVersion;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand))]
     public partial bool IsBusy { get; private set; }
 
     [ObservableProperty]
@@ -30,6 +31,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     public partial ClothingProject? Project { get; private set; }
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand))]
     public partial string? ProjectDir { get; private set; }
 
     [ObservableProperty]
@@ -141,6 +143,40 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         MarkChanged(rebuildTree: true);
         Status = $"{result.Added.Count} prenda(s) importada(s)." + (result.Warnings.Count > 0 ? " " + string.Join(" ", result.Warnings) : "");
         if (result.Added.LastOrDefault() is { } last) Select(last.Id);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanFix))]
+    private async Task BuildResourceAsync()
+    {
+        var parent = await dialogs.PickFolderAsync("Carpeta donde crear el recurso de FiveM");
+        if (parent is null) return;
+        await BuildResourceAsync(Path.Combine(parent, Project!.CollectionName));
+    }
+
+    public async Task BuildResourceAsync(string outputDir)
+    {
+        var snapshot = ProjectFile.Deserialize(ProjectFile.Serialize(Project!));
+        var dir = ProjectDir!;
+        IsBusy = true;
+        Status = "Generando el recurso…";
+        try
+        {
+            var result = await Task.Run(() => ResourceExporter.Export(snapshot, dir, outputDir));
+            Status = $"Recurso generado en {result.OutputDir}: {result.Drawables} prenda(s), {result.Files} archivo(s)."
+                + (result.Warnings.Count > 0 ? " " + string.Join(" ", result.Warnings) : "");
+        }
+        catch (ExportException ex)
+        {
+            Status = $"No se generó el recurso: hay {ex.Errors.Count} error(es) en el panel de problemas.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            Status = $"No se generó el recurso: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
@@ -281,8 +317,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
             var genderNode = new TreeNode(gender.Label);
             foreach (var slot in SlotOption.All)
             {
-                var drawables = Project.DrawablesFor(gender.Value).Where(d => SlotOption.For(d) == slot)
-                    .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                var drawables = ClothingProject.InGameOrder(Project.DrawablesFor(gender.Value).Where(d => SlotOption.For(d) == slot));
                 if (drawables.Count == 0) continue;
                 var slotNode = new TreeNode($"{slot.Label} ({drawables.Count})");
                 foreach (var d in drawables)

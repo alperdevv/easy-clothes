@@ -11,6 +11,7 @@
     <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenProjectCommand}" />
     <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
     <KeyBinding Gesture="Ctrl+I" Command="{Binding ImportCommand}" />
+    <KeyBinding Gesture="Ctrl+B" Command="{Binding BuildResourceCommand}" />
   </Window.KeyBindings>
 
   <DockPanel>
@@ -22,6 +23,8 @@
         <Rectangle Classes="separator" />
         <Button Content="Importar prendas" Command="{Binding ImportCommand}" ToolTip.Tip="Importar .ydd con sus texturas (Ctrl+I)" />
         <Button Content="Eliminar" Command="{Binding RemoveCommand}" />
+        <Rectangle Classes="separator" />
+        <Button Content="Generar recurso" Command="{Binding BuildResourceCommand}" ToolTip.Tip="Crear la carpeta del recurso de FiveM (Ctrl+B)" />
       </StackPanel>
     </Border>
 

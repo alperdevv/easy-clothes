@@ -16,6 +16,10 @@ public sealed class ClothingProject
 
     public IEnumerable<Drawable> DrawablesFor(PedGender gender) =>
         Drawables.Where(d => d.Gender == gender);
+
+    // The order drawables get their in-game index, and the order the tree shows them.
+    public static List<Drawable> InGameOrder(IEnumerable<Drawable> drawables) =>
+        drawables.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ThenBy(d => d.Id).ToList();
 }
 
 public sealed class Drawable

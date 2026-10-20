@@ -1,5 +1,6 @@
 using System.Globalization;
 using EasyClothes.Core.Analysis;
+using EasyClothes.Core.Export;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Meshes;
 using EasyClothes.Core.Model;
@@ -13,6 +14,7 @@ return args switch
     ["new", var dir, var name] => await NewProject(dir, name),
     ["import", var project, .. var models] when models.Length > 0 => await Import(project, models),
     ["validate", var project] => await Validate(project),
+    ["build", var project, var outDir] => await Build(project, outDir),
     ["inspect", var path] => Inspect(path),
     ["stats", var dir] => Stats(dir),
     ["optimize-texture", var path, var maxSide] => OptimizeTexture(path, int.Parse(maxSide)),
@@ -29,6 +31,7 @@ static int Usage()
           easyclothes new <dir> <name>                 Create an empty project
           easyclothes import <project> <file.ydd>...   Import models and the textures next to them
           easyclothes validate <project>               List project problems (exit 1 on errors)
+          easyclothes build <project> <out-dir>        Generate the FiveM resource (fxmanifest, stream, .ymt, .meta)
           easyclothes inspect <file.ydd|file.ytd>      Show resource header and list textures or drawables
           easyclothes optimize-texture <file.ytd> <max-side>  Resize, regenerate mips and recompress in place
           easyclothes reduce-mesh <file.ydd> <triangles>      Simplify the high LOD in place
@@ -171,6 +174,22 @@ static async Task<int> Validate(string projectPath)
         Console.WriteLine($"{i.Severity.ToString().ToLowerInvariant()}: {i.Message}{(i.Fix is { } fix ? $" [fix: {fix.Label}]" : "")}");
     Console.WriteLine(issues.Count == 0 ? "No problems found." : $"{issues.Count} problem(s).");
     return issues.Any(i => i.Severity == IssueSeverity.Error) ? 1 : 0;
+}
+
+static async Task<int> Build(string projectPath, string outDir)
+{
+    try
+    {
+        var result = ResourceExporter.Export(await ProjectFile.LoadAsync(projectPath), Path.GetDirectoryName(Path.GetFullPath(projectPath))!, outDir);
+        foreach (var w in result.Warnings) Console.Error.WriteLine($"! {w}");
+        Console.WriteLine($"{result.Drawables} drawable(s), {result.Files} file(s) written to {result.OutputDir}");
+        return 0;
+    }
+    catch (ExportException ex)
+    {
+        foreach (var e in ex.Errors) Console.Error.WriteLine($"error: {e}");
+        return 1;
+    }
 }
 
 static int Stats(string dir)
