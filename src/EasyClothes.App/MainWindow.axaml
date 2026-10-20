@@ -22,6 +22,7 @@
         <Button Content="Guardar" Command="{Binding SaveCommand}" ToolTip.Tip="Guardar (Ctrl+S)" />
         <Rectangle Classes="separator" />
         <Button Content="Importar prendas" Command="{Binding ImportCommand}" ToolTip.Tip="Importar .ydd con sus texturas (Ctrl+I)" />
+        <Button Content="Importar tatuajes" Command="{Binding ImportTattoosCommand}" ToolTip.Tip="Importar imágenes .png o .ytd como tatuajes" />
         <Button Content="Eliminar" Command="{Binding RemoveCommand}" />
         <Rectangle Classes="separator" />
         <Button Content="Generar recurso" Command="{Binding BuildResourceCommand}" ToolTip.Tip="Crear la carpeta del recurso de FiveM (Ctrl+B)" />
@@ -120,8 +121,6 @@
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
-            <CheckBox Content="Oculta el pelo" IsChecked="{Binding HideHair}" Margin="0,8,0,0" />
-            <CheckBox Content="Se cae al recibir un golpe" IsChecked="{Binding KnockOffOnHit}" IsVisible="{Binding IsProp}" />
             <TextBlock Classes="label" Text="{Binding Summary}" Margin="0,12,0,0" />
             <ItemsControl ItemsSource="{Binding Textures}">
               <ItemsControl.ItemTemplate>
@@ -133,6 +132,38 @@
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
+          </StackPanel>
+
+          <TextBlock Classes="header" Text="TATUAJE" IsVisible="{Binding HasTattooSelection}" />
+          <StackPanel Classes="form" DataContext="{Binding SelectedTattoo}" IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).HasTattooSelection}"
+                      x:DataType="vm:TattooViewModel">
+            <TextBlock Classes="label" Text="Nombre" />
+            <TextBox Text="{Binding Name}" />
+            <TextBlock Classes="label" Text="Zona" />
+            <ComboBox ItemsSource="{x:Static vm:TattooZoneOption.All}" SelectedItem="{Binding Zone}" HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:TattooZoneOption">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,6,0,0">
+              <CheckBox Content="Hombre" IsChecked="{Binding IsMale}" />
+              <CheckBox Content="Mujer" IsChecked="{Binding IsFemale}" />
+            </StackPanel>
+            <TextBlock Classes="label" Text="Posición (UV)" />
+            <Grid ColumnDefinitions="*,6,*">
+              <NumericUpDown Value="{Binding UvX}" Increment="0.01" FormatString="0.000" ToolTip.Tip="X" />
+              <NumericUpDown Grid.Column="2" Value="{Binding UvY}" Increment="0.01" FormatString="0.000" ToolTip.Tip="Y" />
+            </Grid>
+            <TextBlock Classes="label" Text="Escala" />
+            <Grid ColumnDefinitions="*,6,*">
+              <NumericUpDown Value="{Binding ScaleX}" Increment="0.05" Minimum="0.01" FormatString="0.000" ToolTip.Tip="X" />
+              <NumericUpDown Grid.Column="2" Value="{Binding ScaleY}" Increment="0.05" Minimum="0.01" FormatString="0.000" ToolTip.Tip="Y" />
+            </Grid>
+            <TextBlock Classes="label" Text="Rotación (grados)" />
+            <NumericUpDown Value="{Binding Rotation}" Increment="5" Minimum="-360" Maximum="360" FormatString="0.0" />
+            <TextBlock Classes="muted" Text="{Binding FileName}" Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
           </StackPanel>
         </StackPanel>
       </ScrollViewer>

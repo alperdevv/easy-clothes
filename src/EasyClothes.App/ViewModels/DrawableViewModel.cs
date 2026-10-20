@@ -47,24 +47,6 @@ public sealed partial class DrawableViewModel(Drawable model, Action<DrawableVie
 
     public bool IsProp => Model.IsProp;
 
-    public bool HideHair
-    {
-        get => Model.Flags.HideHair;
-        set
-        {
-            if (SetProperty(Model.Flags.HideHair, value, Model.Flags, (f, v) => f.HideHair = v)) onChanged(this, false);
-        }
-    }
-
-    public bool KnockOffOnHit
-    {
-        get => Model.Flags.KnockOffOnHit;
-        set
-        {
-            if (SetProperty(Model.Flags.KnockOffOnHit, value, Model.Flags, (f, v) => f.KnockOffOnHit = v)) onChanged(this, false);
-        }
-    }
-
     public IReadOnlyList<TextureItem> Textures => Model.Textures
         .Select((t, i) => new TextureItem(i, TextureVariation.LetterFor(i).ToString(), ShortName(t.TexturePath), t.TexturePath))
         .ToList();

@@ -7,6 +7,7 @@ using EasyClothes.Core.Export;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Projects;
+using EasyClothes.Core.Textures;
 using EasyClothes.Core.Validation;
 
 namespace EasyClothes.App.ViewModels;
@@ -27,7 +28,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasProject), nameof(Title))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ImportCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ImportCommand), nameof(ImportTattoosCommand))]
     public partial ClothingProject? Project { get; private set; }
 
     [ObservableProperty]
@@ -47,6 +48,11 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     public partial DrawableViewModel? Selected { get; private set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTattooSelection))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveCommand))]
+    public partial TattooViewModel? SelectedTattoo { get; private set; }
+
+    [ObservableProperty]
     public partial TextureItem? SelectedTexture { get; set; }
 
     [ObservableProperty]
@@ -62,6 +68,8 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     public bool HasFixes => Issues.Any(i => i.HasFix);
     private bool CanFix => !IsBusy && ProjectDir is not null;
     public bool HasSelection => Selected is not null;
+    public bool HasTattooSelection => SelectedTattoo is not null;
+    private bool CanRemove => HasSelection || HasTattooSelection;
     public string Title => Project is null ? "EasyClothes" : $"EasyClothes — {Project.Name}{(IsDirty ? " *" : "")}";
 
     public string IssueSummary
@@ -106,7 +114,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     [RelayCommand]
     private async Task OpenProjectAsync()
     {
-        var files = await dialogs.PickFilesAsync("Abrir proyecto", "Proyecto EasyClothes", "*" + ProjectFile.Extension, multiple: false);
+        var files = await dialogs.PickFilesAsync("Abrir proyecto", "Proyecto EasyClothes", ["*" + ProjectFile.Extension], multiple: false);
         if (files.Count > 0) await OpenProjectFileAsync(files[0]);
     }
 
@@ -135,7 +143,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     [RelayCommand(CanExecute = nameof(HasProject))]
     private async Task ImportAsync()
     {
-        var files = await dialogs.PickFilesAsync("Importar prendas", "Modelos de ropa", "*.ydd", multiple: true);
+        var files = await dialogs.PickFilesAsync("Importar prendas", "Modelos de ropa", ["*.ydd"], multiple: true);
         if (files.Count == 0) return;
 
         var fallback = Selected?.Model.Gender ?? PedGender.Male;
@@ -179,10 +187,26 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
     }
 
-    [RelayCommand(CanExecute = nameof(HasSelection))]
+    [RelayCommand(CanExecute = nameof(HasProject))]
+    private async Task ImportTattoosAsync()
+    {
+        var files = await dialogs.PickFilesAsync("Importar tatuajes", "Imágenes", ImageLoader.Extensions.Select(e => "*" + e).ToList(), multiple: true);
+        if (files.Count > 0) ImportTattoos(files);
+    }
+
+    public void ImportTattoos(IReadOnlyList<string> files)
+    {
+        var result = TattooImporter.Import(Project!, ProjectDir!, files, TattooZone.Torso);
+        MarkChanged(rebuildTree: true);
+        Status = $"{result.Added.Count} tatuaje(s) importado(s)." + (result.Warnings.Count > 0 ? " " + string.Join(" ", result.Warnings) : "");
+        if (result.Added.LastOrDefault() is { } last) Select(last.Id);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRemove))]
     private void Remove()
     {
-        Project!.Drawables.Remove(Selected!.Model);
+        if (SelectedTattoo is { } tattoo) Project!.Tattoos.Remove(tattoo.Model);
+        else Project!.Drawables.Remove(Selected!.Model);
         MarkChanged(rebuildTree: true);
     }
 
@@ -255,6 +279,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         var sameDrawable = Selected?.Model.Id == value.Drawable?.Model.Id;
         var textureIndex = sameDrawable ? SelectedTexture?.Index ?? 0 : 0;
         Selected = value.Drawable;
+        SelectedTattoo = value.Tattoo;
         SelectedTexture = Selected?.Textures.ElementAtOrDefault(textureIndex) ?? Selected?.Textures.FirstOrDefault();
         if (Selected is null || SelectedTexture is null) _ = LoadPreviewAsync();
     }
@@ -264,6 +289,20 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     private async Task LoadPreviewAsync()
     {
         var version = ++_previewVersion;
+        if (SelectedTattoo is { } tattoo && ProjectDir is not null)
+        {
+            var imagePath = Path.Combine(ProjectDir, tattoo.Model.TexturePath);
+            try
+            {
+                var image = await Task.Run(() => Preview.Image(imagePath));
+                if (version == _previewVersion) Preview = image;
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
+            {
+                if (version == _previewVersion) Preview = new Preview([], null, $"No se pudo cargar: {ex.Message}");
+            }
+            return;
+        }
         if (Selected is null || ProjectDir is null)
         {
             Preview = null;
@@ -306,9 +345,15 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         MarkChanged(rebuildTree: regroup);
     }
 
+    private void OnTattooChanged(TattooViewModel tattoo, bool regroup)
+    {
+        if (!regroup && FindNode(tattoo.Model.Id) is { } node) node.Title = tattoo.Name;
+        MarkChanged(rebuildTree: regroup);
+    }
+
     private void RebuildTree()
     {
-        var selectedId = Selected?.Model.Id;
+        var selectedId = Selected?.Model.Id ?? SelectedTattoo?.Model.Id;
         Tree.Clear();
         if (Project is null) return;
 
@@ -327,12 +372,28 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
             if (genderNode.Children.Count > 0) Tree.Add(genderNode);
         }
 
+        if (Project.Tattoos.Count > 0)
+        {
+            var tattoosNode = new TreeNode($"Tatuajes ({Project.Tattoos.Count})");
+            foreach (var zone in TattooZoneOption.All)
+            {
+                var tattoos = Project.Tattoos.Where(t => t.Zone == zone.Value).OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList();
+                if (tattoos.Count == 0) continue;
+                var zoneNode = new TreeNode($"{zone.Label} ({tattoos.Count})");
+                foreach (var t in tattoos)
+                    zoneNode.Children.Add(new TreeNode(t.Name, tattoo: new TattooViewModel(t, OnTattooChanged)));
+                tattoosNode.Children.Add(zoneNode);
+            }
+            Tree.Add(tattoosNode);
+        }
+
         if (selectedId is { } id && FindNode(id) is { } node)
             SelectedNode = node;
         else
         {
             SelectedNode = null;
             Selected = null;
+            SelectedTattoo = null;
             SelectedTexture = null;
         }
     }
@@ -343,7 +404,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     }
 
     private TreeNode? FindNode(Guid id) =>
-        Tree.SelectMany(g => g.Children).SelectMany(s => s.Children).FirstOrDefault(n => n.Drawable?.Model.Id == id);
+        Tree.SelectMany(g => g.Children).SelectMany(s => s.Children).FirstOrDefault(n => (n.Drawable?.Model.Id ?? n.Tattoo?.Model.Id) == id);
 
     private async Task ValidateAsync()
     {

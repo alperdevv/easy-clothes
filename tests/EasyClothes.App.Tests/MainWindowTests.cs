@@ -10,6 +10,7 @@ using EasyClothes.App.Viewer;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Projects;
+using EasyClothes.Core.Textures;
 
 namespace EasyClothes.App.Tests;
 
@@ -88,6 +89,42 @@ public sealed class MainWindowTests : IDisposable
         await window.ViewModel.BuildResourceAsync(output);
         Assert.StartsWith("Recurso generado", window.ViewModel.Status);
         Assert.True(File.Exists(Path.Combine(output, "stream", "mp_m_freemode_01_ui.ymt")));
+    }
+
+    [AvaloniaFact]
+    public async Task Imported_tattoos_appear_in_the_tree_preview_and_can_be_removed()
+    {
+        var png = Path.Combine(_dir, "rosa.png");
+        using (var file = File.Create(png))
+            PngWriter.Write(new RgbaImage(8, 4, Enumerable.Repeat((byte)128, 8 * 4 * 4).ToArray()), file);
+        var path = await SaveProject(new ClothingProject { Name = "UI", CollectionName = "ui" });
+        var window = new MainWindow { Width = 1440, Height = 900 };
+        window.Show();
+        await window.ViewModel.OpenProjectFileAsync(path);
+
+        window.ViewModel.ImportTattoos([png]);
+        for (var i = 0; i < 100 && window.ViewModel.Preview is null; i++)
+        {
+            await Task.Delay(20);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Assert.Equal("rosa", window.ViewModel.SelectedTattoo?.Name);
+        Assert.Equal("Tatuajes (1)", window.ViewModel.Tree.Single().Title);
+        Assert.Equal("8x4", window.ViewModel.Preview?.Status);
+        Assert.Equal("Torso (1)", window.ViewModel.Tree.Single().Children.Single().Title);
+        window.ViewModel.SelectedTattoo!.Zone = TattooZoneOption.All.Single(z => z.Value == TattooZone.LeftArm);
+        Assert.Equal("Brazo izquierdo (1)", window.ViewModel.Tree.Single().Children.Single().Title);
+        Assert.Equal("rosa", window.ViewModel.SelectedTattoo?.Name);
+        window.ViewModel.SelectedTattoo!.UvX = 0.3m;
+        window.ViewModel.SelectedTattoo.IsFemale = false;
+        Assert.Equal(0.3f, window.ViewModel.Project!.Tattoos[0].UvX);
+        Assert.Equal([PedGender.Male], window.ViewModel.Project.Tattoos[0].Genders);
+        Capture(window, Environment.GetEnvironmentVariable("EASYCLOTHES_SCREENSHOTS"), "tattoo.png");
+
+        window.ViewModel.RemoveCommand.Execute(null);
+        Assert.Empty(window.ViewModel.Project.Tattoos);
+        Assert.Empty(window.ViewModel.Tree);
     }
 
     [AvaloniaFact]

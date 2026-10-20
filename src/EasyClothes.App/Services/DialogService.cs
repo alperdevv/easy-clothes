@@ -5,13 +5,13 @@ namespace EasyClothes.App.Services;
 
 public sealed class DialogService(TopLevel topLevel) : IDialogService
 {
-    public async Task<IReadOnlyList<string>> PickFilesAsync(string title, string description, string pattern, bool multiple)
+    public async Task<IReadOnlyList<string>> PickFilesAsync(string title, string description, IReadOnlyList<string> patterns, bool multiple)
     {
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = title,
             AllowMultiple = multiple,
-            FileTypeFilter = [new FilePickerFileType(description) { Patterns = [pattern] }],
+            FileTypeFilter = [new FilePickerFileType(description) { Patterns = patterns }],
         });
         return files.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
     }
