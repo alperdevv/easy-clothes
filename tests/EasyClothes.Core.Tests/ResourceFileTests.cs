@@ -39,6 +39,13 @@ public class ResourceFileTests
     }
 
     [Fact]
+    public void Rejects_empty_files_as_invalid_data()
+    {
+        using var file = new MemoryStream();
+        Assert.Throws<InvalidDataException>(() => ResourceFile.Read(file));
+    }
+
+    [Fact]
     public void Rejects_truncated_data()
     {
         using var file = BuildResource(13, OnePage512, OnePage512, new byte[0x200], new byte[10]);

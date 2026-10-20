@@ -4,4 +4,8 @@
     <InternalsVisibleTo Include="EasyClothes.Core.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="BCnEncoder.Net" Version="2.3.0" />
+  </ItemGroup>
+
 </Project>

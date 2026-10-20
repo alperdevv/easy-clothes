@@ -1,4 +1,5 @@
 using System.Globalization;
+using EasyClothes.Core.Analysis;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Projects;
@@ -12,6 +13,8 @@ return args switch
     ["import", var project, .. var models] when models.Length > 0 => await Import(project, models),
     ["validate", var project] => await Validate(project),
     ["inspect", var path] => Inspect(path),
+    ["stats", var dir] => Stats(dir),
+    ["optimize-texture", var path, var maxSide] => OptimizeTexture(path, int.Parse(maxSide)),
     ["export-png", var path, var outDir] => ExportPng(path, outDir),
     ["export-obj", var path, var outDir] => ExportObj(path, outDir),
     _ => Usage(),
@@ -25,6 +28,7 @@ static int Usage()
           easyclothes import <project> <file.ydd>...   Import models and the textures next to them
           easyclothes validate <project>               List project problems (exit 1 on errors)
           easyclothes inspect <file.ydd|file.ytd>      Show resource header and list textures or drawables
+          easyclothes optimize-texture <file.ytd> <max-side>  Resize, regenerate mips and recompress in place
           easyclothes export-png <file.ytd> <out-dir>  Decode every texture to PNG
           easyclothes export-obj <file.ydd> <out-dir>  Export each drawable's high LOD as Wavefront OBJ
         """);
@@ -159,8 +163,46 @@ static async Task<int> Import(string projectPath, string[] models)
 
 static async Task<int> Validate(string projectPath)
 {
-    var issues = ProjectValidator.Validate(await ProjectFile.LoadAsync(projectPath), Path.GetDirectoryName(Path.GetFullPath(projectPath))!);
-    foreach (var i in issues) Console.WriteLine($"{(i.Severity == IssueSeverity.Error ? "error" : "warning")}: {i.Message}");
+    var issues = ProjectValidator.Validate(await ProjectFile.LoadAsync(projectPath), Path.GetDirectoryName(Path.GetFullPath(projectPath))!, new AnalysisCache());
+    foreach (var i in issues)
+        Console.WriteLine($"{i.Severity.ToString().ToLowerInvariant()}: {i.Message}{(i.Fix is { } fix ? $" [fix: {fix.Label}]" : "")}");
     Console.WriteLine(issues.Count == 0 ? "No problems found." : $"{issues.Count} problem(s).");
     return issues.Any(i => i.Severity == IssueSeverity.Error) ? 1 : 0;
+}
+
+static int Stats(string dir)
+{
+    var models = Directory.EnumerateFiles(dir, "*.ydd", SearchOption.AllDirectories)
+        .Select(p => (Path: p, Report: AssetAnalyzer.AnalyzeModel(p))).ToList();
+    var textures = Directory.EnumerateFiles(dir, "*.ytd", SearchOption.AllDirectories)
+        .Select(p => (Path: p, Report: AssetAnalyzer.AnalyzeTexture(p))).ToList();
+
+    static string Percentiles(IEnumerable<double> values)
+    {
+        var sorted = values.Order().ToArray();
+        return string.Join("  ", new[] { 50, 90, 99, 100 }.Select(p => $"p{p}={sorted[Math.Min(sorted.Length - 1, sorted.Length * p / 100)]:N0}"));
+    }
+
+    Console.WriteLine($"Models: {models.Count}");
+    Console.WriteLine($"  high LOD triangles  {Percentiles(models.Select(m => (double)(m.Report.High?.Triangles ?? 0)))}");
+    Console.WriteLine($"  graphics KiB        {Percentiles(models.Select(m => m.Report.GraphicsSize / 1024.0))}");
+    Console.WriteLine($"  with UV out of 0..1 {models.Count(m => m.Report.UvOutOfRange > 0)}  invalid UV {models.Count(m => m.Report.UvInvalid > 0)}  degenerate {models.Count(m => m.Report.DegenerateTriangles > 0)}");
+    Console.WriteLine($"  without Medium LOD  {models.Count(m => m.Report.Lods.All(l => l.Level != LodLevel.Medium))}");
+    var all = textures.SelectMany(t => t.Report.Textures).ToList();
+    Console.WriteLine($"Textures: {all.Count} in {textures.Count} files");
+    Console.WriteLine($"  max side            {Percentiles(all.Select(t => (double)Math.Max(t.Width, t.Height)))}");
+    Console.WriteLine($"  graphics KiB        {Percentiles(textures.Select(t => t.Report.GraphicsSize / 1024.0))}");
+    Console.WriteLine($"  non power of two    {all.Count(t => !int.IsPow2(t.Width) || !int.IsPow2(t.Height))}  single mip {all.Count(t => t.MipLevels == 1 && Math.Max(t.Width, t.Height) > 64)}");
+    foreach (var (path, report) in models.Where(m => m.Report.UvOutOfRange > 0).Take(5))
+        Console.WriteLine($"  uv sample: {Path.GetFileName(path)} {report.UvOutOfRange}/{report.Vertices}");
+    return 0;
+}
+
+static int OptimizeTexture(string path, int maxSide)
+{
+    var result = TextureOptimizer.Optimize(path, maxSide);
+    foreach (var c in result.Changes)
+        Console.WriteLine($"{c.Name}: {c.OldWidth}x{c.OldHeight} {c.OldFormat} -> {c.NewWidth}x{c.NewHeight} {c.NewFormat}, {c.Mips} mips");
+    Console.WriteLine($"File {result.OldFileSize:N0} -> {result.NewFileSize:N0} bytes, graphics memory {result.OldGraphicsSize / 1024:N0} -> {result.NewGraphicsSize / 1024:N0} KiB");
+    return 0;
 }

@@ -66,6 +66,33 @@ public class SampleFilesTests
         Assert.Empty(failures);
     }
 
+    [Fact]
+    public void Sample_textures_survive_optimization()
+    {
+        var dir = Directory.CreateTempSubdirectory("easyclothes-samples-").FullName;
+        try
+        {
+            foreach (var source in Samples("*.ytd").Take(25))
+            {
+                var copy = Path.Combine(dir, Path.GetFileName(source));
+                File.Copy(source, copy);
+                Textures.TextureOptimizer.Optimize(copy, 1024);
+
+                var resource = ResourceFile.Read(copy);
+                foreach (var t in TextureDictionary.Read(resource))
+                {
+                    Assert.True(Math.Max(t.Width, t.Height) <= 1024, $"{source}: {t}");
+                    Assert.True(t.MipLevels > 1, $"{source}: {t}");
+                    Assert.Equal(t.Width * t.Height * 4, TextureDictionary.Decode(resource, t).Pixels.Length);
+                }
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     private static IEnumerable<string> Samples(string pattern) =>
         SamplesDir is null ? [] : Directory.EnumerateFiles(SamplesDir, pattern, SearchOption.AllDirectories);
 }

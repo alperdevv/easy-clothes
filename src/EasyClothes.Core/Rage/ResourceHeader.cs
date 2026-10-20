@@ -28,6 +28,16 @@ public sealed record ResourceHeader(uint Version, uint SystemFlags, uint Graphic
             BinaryPrimitives.ReadUInt32LittleEndian(data[12..]));
     }
 
+    // Mirrors what the game's own files use: a single page of 16 × base, with the low
+    // nibble of the version stored in the top nibble of the flags.
+    internal static uint FlagsForSize(int size, int versionNibble)
+    {
+        var shift = 0;
+        while ((0x200L << shift) * 16 < size) shift++;
+        if (shift > 0xF) throw new InvalidDataException($"Segment of {size} bytes is too large for a single resource page.");
+        return (uint)versionNibble << 28 | 1u << 17 | (uint)shift;
+    }
+
     // Low nibble = base page size (0x200 << n); the other bit fields count pages of decreasing size.
     internal static int SizeFromFlags(uint flags)
     {
@@ -55,8 +65,7 @@ public sealed class ResourceFile
     public static ResourceFile Read(Stream stream)
     {
         Span<byte> headerBytes = stackalloc byte[ResourceHeader.Size];
-        stream.ReadExactly(headerBytes);
-        var header = ResourceHeader.Read(headerBytes);
+        var header = ResourceHeader.Read(headerBytes[..stream.ReadAtLeast(headerBytes, ResourceHeader.Size, throwOnEndOfStream: false)]);
 
         var expected = header.SystemSize + header.GraphicsSize;
         var buffer = new byte[expected];
@@ -73,6 +82,38 @@ public sealed class ResourceFile
             SystemData = buffer[..header.SystemSize],
             GraphicsData = buffer[header.SystemSize..],
         };
+    }
+
+    public static ResourceFile Create(uint version, byte[] systemData, byte[] graphicsData)
+    {
+        var header = new ResourceHeader(version,
+            ResourceHeader.FlagsForSize(systemData.Length, (int)(version >> 4) & 0xF),
+            ResourceHeader.FlagsForSize(graphicsData.Length, (int)version & 0xF));
+        var system = new byte[header.SystemSize];
+        var graphics = new byte[header.GraphicsSize];
+        systemData.CopyTo(system, 0);
+        graphicsData.CopyTo(graphics, 0);
+        return new ResourceFile { Header = header, SystemData = system, GraphicsData = graphics };
+    }
+
+    public void Write(Stream stream)
+    {
+        Span<byte> header = stackalloc byte[ResourceHeader.Size];
+        BinaryPrimitives.WriteUInt32LittleEndian(header, ResourceHeader.Rsc7Magic);
+        BinaryPrimitives.WriteUInt32LittleEndian(header[4..], Header.Version);
+        BinaryPrimitives.WriteUInt32LittleEndian(header[8..], Header.SystemFlags);
+        BinaryPrimitives.WriteUInt32LittleEndian(header[12..], Header.GraphicsFlags);
+        stream.Write(header);
+        using var deflate = new DeflateStream(stream, CompressionLevel.SmallestSize, leaveOpen: true);
+        deflate.Write(SystemData);
+        deflate.Write(GraphicsData);
+    }
+
+    public void Write(string path)
+    {
+        var tmp = path + ".tmp";
+        using (var fs = File.Create(tmp)) Write(fs);
+        File.Move(tmp, path, overwrite: true);
     }
 
     public static ResourceFile Read(string path)

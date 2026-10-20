@@ -5,6 +5,7 @@ namespace EasyClothes.Core.Rage;
 public sealed record TextureInfo(string Name, int Width, int Height, string Format, int MipLevels)
 {
     internal ulong DataPointer { get; init; }
+    internal ulong StructPointer { get; init; }
 
     public TextureFormat PixelFormat => Format switch
     {
@@ -20,15 +21,17 @@ public static class TextureDictionary
     public const uint ResourceVersion = 13;
 
     internal const ulong DictionaryRoot = 0x50000000;
+    internal const ulong DictionaryPagesInfo = 0x08;
     internal const ulong DictionaryHashes = 0x20;
     internal const ulong DictionaryItems = 0x30;
 
-    private const ulong TextureName = 0x28;
-    private const ulong TextureWidth = 0x50;
-    private const ulong TextureHeight = 0x52;
-    private const ulong TextureFormat = 0x58;
-    private const ulong TextureLevels = 0x5D;
-    private const ulong TextureData = 0x70;
+    internal const ulong TextureName = 0x28;
+    internal const ulong TextureWidth = 0x50;
+    internal const ulong TextureHeight = 0x52;
+    internal const ulong TextureStride = 0x56;
+    internal const ulong TextureFormat = 0x58;
+    internal const ulong TextureLevels = 0x5D;
+    internal const ulong TextureData = 0x70;
 
     public static IReadOnlyList<TextureInfo> Read(ResourceFile resource)
     {
@@ -45,6 +48,7 @@ public static class TextureDictionary
                 reader.At(texture + TextureLevels, 1)[0])
             {
                 DataPointer = reader.UInt64(texture + TextureData),
+                StructPointer = texture,
             })
             .ToList();
     }
