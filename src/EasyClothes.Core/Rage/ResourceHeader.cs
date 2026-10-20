@@ -32,6 +32,7 @@ public sealed record ResourceHeader(uint Version, uint SystemFlags, uint Graphic
     // nibble of the version stored in the top nibble of the flags.
     internal static uint FlagsForSize(int size, int versionNibble)
     {
+        if (size == 0) return (uint)versionNibble << 28;
         var shift = 0;
         while ((0x200L << shift) * 16 < size) shift++;
         if (shift > 0xF) throw new InvalidDataException($"Segment of {size} bytes is too large for a single resource page.");

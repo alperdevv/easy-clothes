@@ -1,4 +1,6 @@
+using EasyClothes.Core.Model;
 using EasyClothes.Core.Rage;
+using EasyClothes.Core.Rage.Meta;
 
 namespace EasyClothes.Core.Tests;
 
@@ -118,6 +120,36 @@ public class SampleFilesTests
         finally
         {
             Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Sample_variation_ymts_match_the_streamed_files_and_rewrite_identically()
+    {
+        foreach (var path in Samples("*_freemode_01_*.ymt"))
+        {
+            var original = ResourceFile.Read(path);
+            var variation = PedVariation.Read(original);
+            var stream = Path.GetDirectoryName(path)!;
+            var collection = Path.GetFileNameWithoutExtension(path);
+            var dlc = collection["mp_m_freemode_01_".Length..];
+
+            foreach (var (slot, counts) in variation.Components)
+            {
+                var code = PedSlotNames.FileCode(slot);
+                Assert.Equal(Directory.GetFiles(stream, $"{collection}^{code}_???_u.ydd").Length, counts.Count);
+                for (var d = 0; d < counts.Count; d++)
+                    Assert.Equal(Directory.GetFiles(stream, $"{collection}^{code}_diff_{d:000}_?_uni.ytd").Length, counts[d]);
+            }
+            var propCollection = collection.Replace("_freemode_01_", "_freemode_01_p_");
+            foreach (var (slot, counts) in variation.Props)
+                Assert.Equal(Directory.GetFiles(stream, $"{propCollection}^{PedSlotNames.FileCode(slot)}_???.ydd").Length, counts.Count);
+
+            var rewritten = new MetaReader(PedVariation.Write(dlc, variation.Components, variation.Props));
+            var source = new MetaReader(original);
+            Assert.Equal(source.Blocks.Select(b => b.Type), rewritten.Blocks.Select(b => b.Type));
+            for (var i = 0; i < source.Blocks.Count; i++)
+                Assert.True(source.Block(i).TrimEnd((byte)0).SequenceEqual(rewritten.Block(i).TrimEnd((byte)0)), $"{path}: block {i} differs");
         }
     }
 
