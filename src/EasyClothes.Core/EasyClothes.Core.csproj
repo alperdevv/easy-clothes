@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="EasyClothes.Core.Tests" />
+  </ItemGroup>
+
+</Project>

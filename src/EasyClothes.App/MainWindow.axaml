@@ -1,0 +1,7 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="EasyClothes.App.MainWindow"
+        Title="Easy Clothes" Width="1280" Height="800">
+  <TextBlock Text="Easy Clothes — Fase 1 (sin interfaz todavía)"
+             HorizontalAlignment="Center" VerticalAlignment="Center" />
+</Window>
