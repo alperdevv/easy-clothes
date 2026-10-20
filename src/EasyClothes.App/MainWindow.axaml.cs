@@ -11,7 +11,11 @@ public partial class MainWindow : Window
     private string _modelStatus = "";
     private string _textureStatus = "";
 
-    public MainWindow() => InitializeComponent();
+    public MainWindow()
+    {
+        InitializeComponent();
+        Viewport.RenderFailed += message => SetStatus(model: message);
+    }
 
     public void LoadModel(string path)
     {

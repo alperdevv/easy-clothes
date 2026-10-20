@@ -73,7 +73,21 @@ public sealed class MeshViewport : OpenGlControlBase
         if (change.Property == ShadingProperty) RequestNextFrameRendering();
     }
 
+    public event Action<string>? RenderFailed;
+
     protected override void OnOpenGlInit(GlInterface gl)
+    {
+        try
+        {
+            Initialize(gl);
+        }
+        catch (Exception ex)
+        {
+            Fail("No se pudo inicializar OpenGL", ex);
+        }
+    }
+
+    private void Initialize(GlInterface gl)
     {
         _gl = GL.GetApi(gl.GetProcAddress);
         var isEs = GlVersion.Type == GlProfileType.OpenGLES;
@@ -91,9 +105,29 @@ public sealed class MeshViewport : OpenGlControlBase
         _gl = null;
     }
 
-    protected override unsafe void OnOpenGlRender(GlInterface gl, int framebuffer)
+    protected override void OnOpenGlRender(GlInterface gl, int framebuffer)
     {
-        if (_gl is not { } g) return;
+        if (_gl is null) return;
+        try
+        {
+            Render(_gl);
+        }
+        catch (Exception ex)
+        {
+            Fail("Error al renderizar", ex);
+        }
+    }
+
+    private void Fail(string message, Exception ex)
+    {
+        _gl = null;
+        var text = $"{message} ({GlVersion.Type} {GlVersion.Major}.{GlVersion.Minor}): {ex.GetType().Name}: {ex.Message}";
+        Console.Error.WriteLine(text);
+        Dispatcher.UIThread.Post(() => RenderFailed?.Invoke(text));
+    }
+
+    private unsafe void Render(GL g)
+    {
         UploadPending(g);
 
         var scale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
