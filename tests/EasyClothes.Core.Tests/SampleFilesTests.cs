@@ -2,10 +2,7 @@ using EasyClothes.Core.Rage;
 
 namespace EasyClothes.Core.Tests;
 
-/// <summary>
-/// Runs the readers over real game-format files. The files are not part of the repo:
-/// point EASYCLOTHES_SAMPLES at a folder of .ydd/.ytd files to enable these tests.
-/// </summary>
+// Set EASYCLOTHES_SAMPLES to a folder of real .ydd/.ytd files to enable these tests.
 public class SampleFilesTests
 {
     private static readonly string? SamplesDir = Environment.GetEnvironmentVariable("EASYCLOTHES_SAMPLES");

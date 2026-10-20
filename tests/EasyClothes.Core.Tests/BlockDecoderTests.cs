@@ -7,7 +7,7 @@ public class BlockDecoderTests
     [Fact]
     public void Dxt1_block_interpolates_between_its_two_colours()
     {
-        // c0 = pure red (0xF800), c1 = pure blue (0x001F); row 0 uses indices 0,1,2,3.
+        // c0 = red, c1 = blue; the first row uses indices 0, 1, 2, 3.
         byte[] block = [0x00, 0xF8, 0x1F, 0x00, 0b11_10_01_00, 0, 0, 0];
 
         var image = BlockDecoder.Decode(TextureFormat.Dxt1, 4, 4, block);
@@ -31,7 +31,7 @@ public class BlockDecoderTests
     [Fact]
     public void Dxt5_alpha_uses_the_eight_step_ramp()
     {
-        // alpha0 = 255, alpha1 = 0; first pixel index 1 (alpha1), second index 2 (6/7 of alpha0).
+        // alpha0 = 255, alpha1 = 0; pixel 0 uses index 1, pixel 1 index 2 (6/7 of alpha0).
         byte[] block = [255, 0, 0b010_001, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0];
 
         var image = BlockDecoder.Decode(TextureFormat.Dxt5, 4, 4, block);

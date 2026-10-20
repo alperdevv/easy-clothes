@@ -3,11 +3,8 @@ using System.IO.Compression;
 
 namespace EasyClothes.Core.Rage;
 
-/// <summary>
-/// Header of a standalone RAGE resource file (RSC7): .ydd, .ydr, .ytd, .yft, etc.
-/// Layout: magic, version, system-page flags, graphics-page flags (4 × uint32 LE),
-/// followed by a raw-deflate stream holding both memory segments back to back.
-/// </summary>
+// RSC7 layout: magic, version, system flags, graphics flags (4 × uint32 LE),
+// then a raw-deflate stream with both segments back to back.
 public sealed record ResourceHeader(uint Version, uint SystemFlags, uint GraphicsFlags)
 {
     public const uint Rsc7Magic = 0x37435352; // "RSC7"
@@ -31,10 +28,7 @@ public sealed record ResourceHeader(uint Version, uint SystemFlags, uint Graphic
             BinaryPrimitives.ReadUInt32LittleEndian(data[12..]));
     }
 
-    /// <summary>
-    /// Decodes a page-flags word into a byte size. The low nibble picks the base page
-    /// size (0x200 &lt;&lt; n); the remaining bit fields count pages of decreasing size.
-    /// </summary>
+    // Low nibble = base page size (0x200 << n); the other bit fields count pages of decreasing size.
     internal static int SizeFromFlags(uint flags)
     {
         var baseSize = 0x200L << (int)(flags & 0xF);
@@ -52,7 +46,6 @@ public sealed record ResourceHeader(uint Version, uint SystemFlags, uint Graphic
     }
 }
 
-/// <summary>A decompressed resource: header plus its system and graphics segments.</summary>
 public sealed class ResourceFile
 {
     public required ResourceHeader Header { get; init; }

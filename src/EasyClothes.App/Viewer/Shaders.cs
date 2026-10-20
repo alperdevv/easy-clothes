@@ -1,11 +1,8 @@
 namespace EasyClothes.App.Viewer;
 
-/// <summary>
-/// GLSL sources. The header differs per platform: Windows renders through ANGLE
-/// (OpenGL ES 3.0), Linux/macOS through desktop OpenGL 3.3.
-/// </summary>
 internal static class Shaders
 {
+    // Windows renders through ANGLE (OpenGL ES 3.0); Linux uses desktop OpenGL 3.3.
     public static string Header(bool isEs) => isEs
         ? "#version 300 es\nprecision highp float;\n"
         : "#version 330 core\n";
@@ -35,9 +32,7 @@ internal static class Shaders
         void main() {
             if (uFlatColour.a > 0.0) { fragColour = uFlatColour; return; }
             vec4 base = uHasTexture ? texture(uTexture, vTexCoord) : vec4(0.72, 0.72, 0.72, 1.0);
-            // Badges and patches are cut out with the diffuse alpha.
             if (base.a < 0.33) discard;
-            // Two-sided headlight: clothing is often single-layer, so back faces are visible.
             float diffuse = abs(dot(normalize(vNormal), uLightDir));
             fragColour = vec4(base.rgb * (0.35 + 0.65 * diffuse), 1.0);
         }

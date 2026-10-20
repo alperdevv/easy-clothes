@@ -1,6 +1,5 @@
 namespace EasyClothes.Core.Textures;
 
-/// <summary>Software decoders for the block-compressed formats GTA uses (BC1/DXT1, BC3/DXT5).</summary>
 public static class BlockDecoder
 {
     public static int CompressedSize(TextureFormat format, int width, int height) => format switch
@@ -29,7 +28,7 @@ public static class BlockDecoder
             case TextureFormat.A8R8G8B8:
                 for (var i = 0; i < width * height; i++)
                 {
-                    // Stored as B, G, R, A in memory.
+                    // Stored as B, G, R, A.
                     pixels[i * 4] = data[i * 4 + 2];
                     pixels[i * 4 + 1] = data[i * 4 + 1];
                     pixels[i * 4 + 2] = data[i * 4];

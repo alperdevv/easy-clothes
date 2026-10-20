@@ -2,10 +2,6 @@ using System.Numerics;
 
 namespace EasyClothes.Core.Viewing;
 
-/// <summary>
-/// Turntable camera around a target point, in GTA's Z-up world space.
-/// Yaw spins around Z; pitch tilts up and down and is clamped short of the poles.
-/// </summary>
 public sealed class OrbitCamera
 {
     private const float MaxPitch = 1.5f;
@@ -29,11 +25,9 @@ public sealed class OrbitCamera
         Pitch = Math.Clamp(Pitch + deltaPitch, -MaxPitch, MaxPitch);
     }
 
-    /// <summary>Multiplies the distance by <paramref name="factor"/> (&lt;1 zooms in).</summary>
     public void Zoom(float factor) =>
         Distance = Math.Clamp(Distance * factor, MinDistance, MaxDistance);
 
-    /// <summary>Centres on a bounding box and backs off until it fits the view.</summary>
     public void Frame(Vector3 min, Vector3 max)
     {
         Target = (min + max) / 2;

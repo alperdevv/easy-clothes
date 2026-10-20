@@ -19,7 +19,6 @@ public enum ShadingMode
     SolidWithWireframe,
 }
 
-/// <summary>3D preview of a drawable: textured, with orbit (left drag), pan-free zoom (wheel) and wireframe.</summary>
 public sealed class MeshViewport : OpenGlControlBase
 {
     public static readonly StyledProperty<ShadingMode> ShadingProperty =
@@ -31,13 +30,11 @@ public sealed class MeshViewport : OpenGlControlBase
     private uint _texture;
     private readonly List<GpuMesh> _gpuMeshes = [];
 
-    // Written on the UI thread, consumed on the next render.
     private IReadOnlyList<MeshData>? _pendingMeshes;
     private RgbaImage? _pendingTexture;
     private bool _textureDirty;
     private Point? _dragOrigin;
 
-    /// <summary>When set, the next frame is read back and passed here (used for --snapshot).</summary>
     public Action<RgbaImage>? SnapshotRequested { get; set; }
 
     public ShadingMode Shading
@@ -126,7 +123,7 @@ public sealed class MeshViewport : OpenGlControlBase
             g.BindVertexArray(mesh.Vao);
             if (Shading != ShadingMode.Wireframe)
             {
-                // Push filled triangles back slightly so the wireframe overlay wins the depth test.
+                // Push triangles back so the wireframe overlay wins the depth test.
                 g.Enable(EnableCap.PolygonOffsetFill);
                 g.PolygonOffset(1f, 1f);
                 g.Uniform4(flatColour, 0f, 0f, 0f, 0f);
@@ -243,7 +240,6 @@ public sealed class MeshViewport : OpenGlControlBase
     {
         public static unsafe GpuMesh Upload(GL g, MeshData mesh)
         {
-            // Interleave position, normal, uv: 8 floats per vertex.
             var interleaved = new float[mesh.VertexCount * 8];
             for (var v = 0; v < mesh.VertexCount; v++)
             {

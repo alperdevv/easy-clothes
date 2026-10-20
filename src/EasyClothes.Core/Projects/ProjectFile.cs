@@ -4,7 +4,6 @@ using EasyClothes.Core.Model;
 
 namespace EasyClothes.Core.Projects;
 
-/// <summary>Reads and writes the project manifest (JSON). Asset files live next to it.</summary>
 public static class ProjectFile
 {
     public const string Extension = ".ecproj";
@@ -34,7 +33,6 @@ public static class ProjectFile
 
     public static async Task SaveAsync(ClothingProject project, string path, CancellationToken ct = default)
     {
-        // Write to a temp file first so a crash never leaves a truncated project.
         var tmp = path + ".tmp";
         await File.WriteAllTextAsync(tmp, Serialize(project), ct);
         File.Move(tmp, path, overwrite: true);

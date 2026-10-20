@@ -1,6 +1,5 @@
 namespace EasyClothes.Core.Rage;
 
-/// <summary>Vertex semantics, in the bit order used by <see cref="VertexDeclaration.Flags"/>.</summary>
 public enum VertexSemantic
 {
     Position = 0,
@@ -21,7 +20,6 @@ public enum VertexSemantic
     Binormal = 15,
 }
 
-/// <summary>Storage type of one vertex component (4-bit codes in <see cref="VertexDeclaration.Types"/>).</summary>
 public enum VertexComponentType
 {
     Half2 = 1,
@@ -35,10 +33,7 @@ public enum VertexComponentType
     Dec3N = 10,
 }
 
-/// <summary>
-/// grcVertexDeclaration: a bitmask of present semantics plus a 4-bit type per semantic.
-/// Components are packed in semantic order with no padding.
-/// </summary>
+// Bitmask of present semantics plus a 4-bit type per semantic; components are packed in semantic order.
 public sealed class VertexDeclaration
 {
     private readonly int[] _offsets = new int[16];
@@ -64,7 +59,6 @@ public sealed class VertexDeclaration
 
     public bool Has(VertexSemantic semantic) => _offsets[(int)semantic] >= 0;
 
-    /// <summary>Byte offset of the semantic inside a vertex, or -1 when absent.</summary>
     public int OffsetOf(VertexSemantic semantic) => _offsets[(int)semantic];
 
     public VertexComponentType TypeOf(VertexSemantic semantic) =>

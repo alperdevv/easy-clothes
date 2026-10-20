@@ -3,11 +3,8 @@ using System.Text;
 
 namespace EasyClothes.Core.Rage;
 
-/// <summary>
-/// Random-access reader over a decompressed resource. Resource structures link to each
-/// other through virtual pointers: 0x5xxxxxxx points into the system segment and
-/// 0x6xxxxxxx into the graphics segment (low 28 bits are the offset).
-/// </summary>
+// Resource structures link through virtual pointers: 0x5xxxxxxx = system segment,
+// 0x6xxxxxxx = graphics segment; the low 28 bits are the offset.
 public sealed class ResourceReader(ResourceFile resource)
 {
     private const ulong SystemBase = 0x50000000;
@@ -36,7 +33,6 @@ public sealed class ResourceReader(ResourceFile resource)
         return Encoding.ASCII.GetString(end < 0 ? available : available[..end]);
     }
 
-    /// <summary>Reads a 64-bit "pointer + count + capacity" array header and returns its element pointers.</summary>
     public IReadOnlyList<ulong> PointerArray(ulong arrayHeader)
     {
         var data = UInt64(arrayHeader);
@@ -47,7 +43,6 @@ public sealed class ResourceReader(ResourceFile resource)
         return result;
     }
 
-    /// <summary>Reads a 64-bit "pointer + count + capacity" array of uint32 values.</summary>
     public IReadOnlyList<uint> UInt32Array(ulong arrayHeader)
     {
         var data = UInt64(arrayHeader);

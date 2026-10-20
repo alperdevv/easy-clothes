@@ -2,10 +2,6 @@ using System.Buffers.Binary;
 
 namespace EasyClothes.Core.Rage;
 
-/// <summary>
-/// One geometry's render data in a GPU-friendly layout: flat float arrays
-/// (positions xyz, normals xyz, uvs uv) and 16-bit triangle-list indices.
-/// </summary>
 public sealed class MeshData
 {
     public required float[] Positions { get; init; }
@@ -16,10 +12,7 @@ public sealed class MeshData
     public int VertexCount => Positions.Length / 3;
     public int TriangleCount => Indices.Length / 3;
 
-    /// <summary>
-    /// Unique triangle edges as a line-list index buffer. Used for wireframe rendering,
-    /// since OpenGL ES (ANGLE on Windows) has no polygon mode.
-    /// </summary>
+    // OpenGL ES (ANGLE on Windows) has no polygon mode, so wireframe is drawn as a line list.
     public ushort[] WireframeIndices()
     {
         var edges = new HashSet<uint>();

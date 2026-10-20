@@ -66,7 +66,7 @@ public partial class MainWindow : Window
 
     private void OnShadingChanged(object? sender, SelectionChangedEventArgs e)
     {
-        // Fires once while the XAML is still loading, before Viewport is assigned.
+        // Fires once while the XAML loads, before Viewport is assigned.
         if (Viewport is null) return;
         Viewport.Shading = (ShadingMode)Math.Max(0, ShadingBox.SelectedIndex);
     }

@@ -15,17 +15,14 @@ public sealed record TextureInfo(string Name, int Width, int Height, string Form
     };
 }
 
-/// <summary>Reads the texture list of a .ytd (pgDictionary&lt;grcTexture&gt;). Pixel data is not decoded yet.</summary>
 public static class TextureDictionary
 {
     public const uint ResourceVersion = 13;
 
-    // Offsets inside pgDictionary (shared by .ytd and .ydd).
     internal const ulong DictionaryRoot = 0x50000000;
     internal const ulong DictionaryHashes = 0x20;
     internal const ulong DictionaryItems = 0x30;
 
-    // Offsets inside grcTexture (legacy/gen8 layout).
     private const ulong TextureName = 0x28;
     private const ulong TextureWidth = 0x50;
     private const ulong TextureHeight = 0x52;
@@ -52,7 +49,6 @@ public static class TextureDictionary
             .ToList();
     }
 
-    /// <summary>Decodes the top mip level of a texture to RGBA.</summary>
     public static RgbaImage Decode(ResourceFile resource, TextureInfo texture)
     {
         var size = BlockDecoder.CompressedSize(texture.PixelFormat, texture.Width, texture.Height);
@@ -60,7 +56,6 @@ public static class TextureDictionary
         return BlockDecoder.Decode(texture.PixelFormat, texture.Width, texture.Height, data);
     }
 
-    /// <summary>Formats are stored as D3D FourCC codes ("DXT1") or D3DFORMAT numbers.</summary>
     internal static string FormatName(uint format) => format switch
     {
         21 => "A8R8G8B8",

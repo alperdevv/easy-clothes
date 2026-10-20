@@ -6,7 +6,7 @@ public enum PedGender
     Female,
 }
 
-/// <summary>Ped component slots. Numeric values match the game's component ids.</summary>
+// Numeric values match the game's component and prop anchor ids.
 public enum ComponentSlot
 {
     Head = 0,
@@ -23,7 +23,6 @@ public enum ComponentSlot
     Top = 11,
 }
 
-/// <summary>Ped prop anchors. Numeric values match the game's anchor ids.</summary>
 public enum PropSlot
 {
     Hat = 0,
@@ -35,7 +34,6 @@ public enum PropSlot
 
 public static class PedSlotNames
 {
-    /// <summary>Base ped model each gender's freemode clothing targets.</summary>
     public static string PedModel(PedGender gender) => gender switch
     {
         PedGender.Male => "mp_m_freemode_01",
@@ -43,7 +41,6 @@ public static class PedSlotNames
         _ => throw new ArgumentOutOfRangeException(nameof(gender), gender, null),
     };
 
-    /// <summary>Short name used in streamed file names (e.g. <c>jbib_000_u.ydd</c>).</summary>
     public static string FileCode(ComponentSlot slot) => slot switch
     {
         ComponentSlot.Head => "head",

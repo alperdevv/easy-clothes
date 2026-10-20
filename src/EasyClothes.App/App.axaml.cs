@@ -22,10 +22,7 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    /// <summary>
-    /// Opens files given on the command line. Debug aid: <c>--wireframe</c> switches shading and
-    /// <c>--snapshot out.png</c> saves the first rendered frame and exits.
-    /// </summary>
+    // Debug aid: open files from the command line; --snapshot out.png saves the first frame and exits.
     private static void ApplyCommandLine(MainWindow window, string[] args)
     {
         for (var i = 0; i < args.Length; i++)

@@ -9,7 +9,7 @@ public class ViewingTests
     [Fact]
     public void Wireframe_lists_each_shared_edge_once()
     {
-        // Two triangles sharing the 1-2 edge: a quad has 5 unique edges.
+        // Two triangles sharing an edge: 5 unique edges.
         var quad = new MeshData { Positions = new float[12], Normals = new float[12], TexCoords = new float[8], Indices = [0, 1, 2, 2, 1, 3] };
 
         var lines = quad.WireframeIndices();

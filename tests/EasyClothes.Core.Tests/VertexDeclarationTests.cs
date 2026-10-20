@@ -4,7 +4,6 @@ namespace EasyClothes.Core.Tests;
 
 public class VertexDeclarationTests
 {
-    // Type word used by every ped drawable in the sample packs.
     private const ulong PedTypes = 0x7755555555996996;
 
     [Theory]

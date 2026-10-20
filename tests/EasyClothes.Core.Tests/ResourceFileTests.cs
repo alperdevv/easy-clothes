@@ -6,9 +6,7 @@ namespace EasyClothes.Core.Tests;
 
 public class ResourceFileTests
 {
-    // One page of the base size: low nibble 0 → 0x200 bytes, bit 27 → 1 page.
     private const uint OnePage512 = 1u << 27;
-    // Base 0x400 (nibble 1), one 16x page (bits 17..23 = 1) → 0x400 * 16.
     private const uint SixteenPages1K = (1u << 17) | 1;
 
     [Theory]

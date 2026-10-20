@@ -10,7 +10,6 @@ public enum LodLevel
 
 public sealed record GeometryInfo(int Vertices, int Indices, int Triangles, int VertexStride)
 {
-    /// <summary>Decodes vertices and indices. Null when the drawable was read with <c>includeMeshes: false</c>.</summary>
     public MeshData? Mesh { get; init; }
 }
 
@@ -22,19 +21,15 @@ public sealed record LodInfo(LodLevel Level, IReadOnlyList<IReadOnlyList<Geometr
 
 public sealed record DrawableInfo(string Name, IReadOnlyList<LodInfo> Lods);
 
-/// <summary>Reads the drawables of a .ydd (pgDictionary&lt;gtaDrawable&gt;): names, LODs and mesh sizes.</summary>
 public static class DrawableDictionary
 {
     public const uint ResourceVersion = 165;
 
-    // Offsets inside gtaDrawable.
     private static readonly ulong[] DrawableLodLists = [0x50, 0x58, 0x60, 0x68];
     private const ulong DrawableName = 0xA8;
 
-    // Offsets inside grmModel.
     private const ulong ModelGeometries = 0x08;
 
-    // Offsets inside grmGeometryQB.
     private const ulong GeometryIndices = 0x58;
     private const ulong GeometryTriangles = 0x5C;
     private const ulong GeometryVertices = 0x60;
@@ -42,17 +37,14 @@ public static class DrawableDictionary
     private const ulong GeometryIndexBuffer = 0x38;
     private const ulong GeometryStride = 0x70;
 
-    // Offsets inside grcVertexBuffer.
     private const ulong VertexBufferCount = 0x18;
     private const ulong VertexBufferData = 0x20;
     private const ulong VertexBufferDeclaration = 0x30;
 
-    // Offsets inside grcVertexDeclaration.
     private const ulong DeclarationFlags = 0x00;
     private const ulong DeclarationStride = 0x04;
     private const ulong DeclarationTypes = 0x08;
 
-    // Offsets inside grcIndexBuffer (16-bit indices).
     private const ulong IndexBufferCount = 0x08;
     private const ulong IndexBufferData = 0x10;
 

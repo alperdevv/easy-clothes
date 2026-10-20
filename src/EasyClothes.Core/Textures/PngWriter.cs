@@ -3,7 +3,6 @@ using System.IO.Compression;
 
 namespace EasyClothes.Core.Textures;
 
-/// <summary>Minimal PNG encoder (8-bit RGBA, no filtering) for previews and exports.</summary>
 public static class PngWriter
 {
     private static readonly byte[] Signature = [0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A];
