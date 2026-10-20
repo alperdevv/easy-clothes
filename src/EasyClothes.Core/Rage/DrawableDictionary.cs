@@ -8,7 +8,11 @@ public enum LodLevel
     VeryLow,
 }
 
-public sealed record GeometryInfo(int Vertices, int Indices, int Triangles, int VertexStride);
+public sealed record GeometryInfo(int Vertices, int Indices, int Triangles, int VertexStride)
+{
+    /// <summary>Decodes vertices and indices. Null when the drawable was read with <c>includeMeshes: false</c>.</summary>
+    public MeshData? Mesh { get; init; }
+}
 
 public sealed record LodInfo(LodLevel Level, IReadOnlyList<IReadOnlyList<GeometryInfo>> Models)
 {
@@ -34,20 +38,36 @@ public static class DrawableDictionary
     private const ulong GeometryIndices = 0x58;
     private const ulong GeometryTriangles = 0x5C;
     private const ulong GeometryVertices = 0x60;
+    private const ulong GeometryVertexBuffer = 0x18;
+    private const ulong GeometryIndexBuffer = 0x38;
     private const ulong GeometryStride = 0x70;
 
-    public static IReadOnlyList<DrawableInfo> Read(ResourceFile resource)
+    // Offsets inside grcVertexBuffer.
+    private const ulong VertexBufferCount = 0x18;
+    private const ulong VertexBufferData = 0x20;
+    private const ulong VertexBufferDeclaration = 0x30;
+
+    // Offsets inside grcVertexDeclaration.
+    private const ulong DeclarationFlags = 0x00;
+    private const ulong DeclarationStride = 0x04;
+    private const ulong DeclarationTypes = 0x08;
+
+    // Offsets inside grcIndexBuffer (16-bit indices).
+    private const ulong IndexBufferCount = 0x08;
+    private const ulong IndexBufferData = 0x10;
+
+    public static IReadOnlyList<DrawableInfo> Read(ResourceFile resource, bool includeMeshes = false)
     {
         if (resource.Header.Version != ResourceVersion)
             throw new InvalidDataException($"Expected a drawable dictionary (version {ResourceVersion}), got version {resource.Header.Version}.");
 
         var reader = new ResourceReader(resource);
         return reader.PointerArray(TextureDictionary.DictionaryRoot + TextureDictionary.DictionaryItems)
-            .Select(drawable => ReadDrawable(reader, drawable))
+            .Select(drawable => ReadDrawable(reader, drawable, includeMeshes))
             .ToList();
     }
 
-    private static DrawableInfo ReadDrawable(ResourceReader reader, ulong drawable)
+    private static DrawableInfo ReadDrawable(ResourceReader reader, ulong drawable, bool includeMeshes)
     {
         var lods = new List<LodInfo>();
         for (var i = 0; i < DrawableLodLists.Length; i++)
@@ -61,12 +81,33 @@ public static class DrawableDictionary
                         reader.UInt16(g + GeometryVertices),
                         (int)reader.UInt32(g + GeometryIndices),
                         (int)reader.UInt32(g + GeometryTriangles),
-                        reader.UInt16(g + GeometryStride)))
+                        reader.UInt16(g + GeometryStride))
+                    {
+                        Mesh = includeMeshes ? ReadMesh(reader, g) : null,
+                    })
                     .ToList())
                 .ToList();
             lods.Add(new LodInfo((LodLevel)i, models));
         }
 
         return new DrawableInfo(reader.CString(reader.UInt64(drawable + DrawableName)) ?? "", lods);
+    }
+
+    private static MeshData ReadMesh(ResourceReader reader, ulong geometry)
+    {
+        var vb = reader.UInt64(geometry + GeometryVertexBuffer);
+        var declPtr = reader.UInt64(vb + VertexBufferDeclaration);
+        var decl = new VertexDeclaration(reader.UInt32(declPtr + DeclarationFlags), reader.UInt64(declPtr + DeclarationTypes));
+        if (decl.Stride != reader.UInt16(declPtr + DeclarationStride))
+            throw new InvalidDataException($"Vertex declaration 0x{decl.Flags:X} decodes to stride {decl.Stride}, file says {reader.UInt16(declPtr + DeclarationStride)}.");
+
+        var vertexCount = (int)reader.UInt32(vb + VertexBufferCount);
+        var vertices = reader.At(reader.UInt64(vb + VertexBufferData), vertexCount * decl.Stride);
+
+        var ib = reader.UInt64(geometry + GeometryIndexBuffer);
+        var indexCount = (int)reader.UInt32(ib + IndexBufferCount);
+        var indices = reader.At(reader.UInt64(ib + IndexBufferData), indexCount * 2);
+
+        return MeshData.Decode(vertices, vertexCount, decl, indices);
     }
 }

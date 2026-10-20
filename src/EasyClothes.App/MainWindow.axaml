@@ -1,7 +1,26 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:viewer="using:EasyClothes.App.Viewer"
         x:Class="EasyClothes.App.MainWindow"
-        Title="Easy Clothes" Width="1280" Height="800">
-  <TextBlock Text="Easy Clothes — Fase 1 (sin interfaz todavía)"
-             HorizontalAlignment="Center" VerticalAlignment="Center" />
+        Title="EasyClothes" Width="1280" Height="800"
+        Background="#1B1D22">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Background="#24272E" BorderBrush="#33373F" BorderThickness="0,0,0,1" Padding="8,6">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button Content="Abrir modelo (.ydd)" Click="OnOpenModel" />
+        <Button Content="Abrir textura (.ytd)" Click="OnOpenTexture" />
+        <ComboBox x:Name="ShadingBox" SelectedIndex="0" Width="180" SelectionChanged="OnShadingChanged">
+          <ComboBoxItem Content="Sólido" />
+          <ComboBoxItem Content="Alámbrico" />
+          <ComboBoxItem Content="Sólido + alámbrico" />
+        </ComboBox>
+        <Button Content="Restablecer cámara" Click="OnResetCamera" />
+      </StackPanel>
+    </Border>
+    <Border DockPanel.Dock="Bottom" Background="#24272E" BorderBrush="#33373F" BorderThickness="0,1,0,0" Padding="10,4">
+      <TextBlock x:Name="StatusText" Foreground="#A0A6B0" FontSize="12"
+                 Text="Abre un .ydd para previsualizarlo. Arrastra para rotar, rueda para zoom." />
+    </Border>
+    <viewer:MeshViewport x:Name="Viewport" />
+  </DockPanel>
 </Window>

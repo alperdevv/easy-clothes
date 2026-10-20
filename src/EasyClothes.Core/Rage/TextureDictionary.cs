@@ -1,6 +1,19 @@
+using EasyClothes.Core.Textures;
+
 namespace EasyClothes.Core.Rage;
 
-public sealed record TextureInfo(string Name, int Width, int Height, string Format, int MipLevels);
+public sealed record TextureInfo(string Name, int Width, int Height, string Format, int MipLevels)
+{
+    internal ulong DataPointer { get; init; }
+
+    public TextureFormat PixelFormat => Format switch
+    {
+        "DXT1" => TextureFormat.Dxt1,
+        "DXT5" => TextureFormat.Dxt5,
+        "A8R8G8B8" => TextureFormat.A8R8G8B8,
+        _ => TextureFormat.Unknown,
+    };
+}
 
 /// <summary>Reads the texture list of a .ytd (pgDictionary&lt;grcTexture&gt;). Pixel data is not decoded yet.</summary>
 public static class TextureDictionary
@@ -18,6 +31,7 @@ public static class TextureDictionary
     private const ulong TextureHeight = 0x52;
     private const ulong TextureFormat = 0x58;
     private const ulong TextureLevels = 0x5D;
+    private const ulong TextureData = 0x70;
 
     public static IReadOnlyList<TextureInfo> Read(ResourceFile resource)
     {
@@ -31,8 +45,19 @@ public static class TextureDictionary
                 reader.UInt16(texture + TextureWidth),
                 reader.UInt16(texture + TextureHeight),
                 FormatName(reader.UInt32(texture + TextureFormat)),
-                reader.At(texture + TextureLevels, 1)[0]))
+                reader.At(texture + TextureLevels, 1)[0])
+            {
+                DataPointer = reader.UInt64(texture + TextureData),
+            })
             .ToList();
+    }
+
+    /// <summary>Decodes the top mip level of a texture to RGBA.</summary>
+    public static RgbaImage Decode(ResourceFile resource, TextureInfo texture)
+    {
+        var size = BlockDecoder.CompressedSize(texture.PixelFormat, texture.Width, texture.Height);
+        var data = new ResourceReader(resource).At(texture.DataPointer, size);
+        return BlockDecoder.Decode(texture.PixelFormat, texture.Width, texture.Height, data);
     }
 
     /// <summary>Formats are stored as D3D FourCC codes ("DXT1") or D3DFORMAT numbers.</summary>

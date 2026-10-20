@@ -18,15 +18,19 @@ public class SampleFilesTests
         {
             try
             {
-                var textures = TextureDictionary.Read(ResourceFile.Read(path));
+                var resource = ResourceFile.Read(path);
+                var textures = TextureDictionary.Read(resource);
                 if (textures.Count == 0) failures.Add($"{path}: no textures");
                 foreach (var t in textures)
                 {
                     if (t.Name.Length == 0 || t.Width == 0 || t.Height == 0 || t.MipLevels == 0)
                         failures.Add($"{path}: suspicious texture {t}");
+                    var image = TextureDictionary.Decode(resource, t);
+                    if (image.Pixels.Length != t.Width * t.Height * 4)
+                        failures.Add($"{path}: {t.Name} decoded to the wrong size");
                 }
             }
-            catch (InvalidDataException ex)
+            catch (Exception ex) when (ex is InvalidDataException or NotSupportedException)
             {
                 failures.Add($"{path}: {ex.Message}");
             }
@@ -42,7 +46,7 @@ public class SampleFilesTests
         {
             try
             {
-                var drawables = DrawableDictionary.Read(ResourceFile.Read(path));
+                var drawables = DrawableDictionary.Read(ResourceFile.Read(path), includeMeshes: true);
                 if (drawables.Count == 0) failures.Add($"{path}: no drawables");
                 foreach (var d in drawables)
                 {
@@ -50,12 +54,14 @@ public class SampleFilesTests
                         failures.Add($"{path}: {d.Name} has no high LOD");
                     foreach (var g in d.Lods.SelectMany(l => l.Models).SelectMany(m => m))
                     {
-                        if (g.Indices != g.Triangles * 3 || g.Vertices == 0 || g.VertexStride == 0)
+                        if (g.Indices != g.Triangles * 3 || g.Vertices == 0 || g.VertexStride == 0
+                            || g.Mesh!.VertexCount != g.Vertices || g.Mesh.Indices.Length != g.Indices
+                            || g.Mesh.Positions.Any(p => !float.IsFinite(p) || Math.Abs(p) > 10))
                             failures.Add($"{path}: {d.Name} geometry {g}");
                     }
                 }
             }
-            catch (InvalidDataException ex)
+            catch (Exception ex) when (ex is InvalidDataException or NotSupportedException)
             {
                 failures.Add($"{path}: {ex.Message}");
             }
