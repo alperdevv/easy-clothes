@@ -44,4 +44,17 @@ public class ViewingTests
         camera.Zoom(0.0001f);
         Assert.Equal(camera.MinDistance, camera.Distance);
     }
+
+    [Fact]
+    public void Panning_moves_the_target_in_the_view_plane()
+    {
+        var camera = new OrbitCamera { Distance = 2 };
+        var before = camera.Position - camera.Target;
+
+        camera.Pan(1, 1);
+
+        Assert.True(camera.Target.X > 0 && camera.Target.Z > 0);
+        Assert.Equal(0, camera.Target.Y, 5);
+        Assert.Equal(before, camera.Position - camera.Target);
+    }
 }

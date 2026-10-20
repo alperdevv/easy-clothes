@@ -1,7 +1,12 @@
+using System.Numerics;
+using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using EasyClothes.App.ViewModels;
+using EasyClothes.App.Viewer;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Projects;
@@ -57,6 +62,33 @@ public sealed class MainWindowTests : IDisposable
         Assert.Equal("vaqueros", window.ViewModel.SelectedNode?.Title);
         Assert.True(window.ViewModel.IsDirty);
         Assert.EndsWith("*", window.Title);
+    }
+
+    [AvaloniaFact]
+    public void Dragging_in_the_viewer_orbits_pans_and_double_click_recentres()
+    {
+        var window = new MainWindow { Width = 1200, Height = 800 };
+        window.Show();
+        var viewport = window.FindControl<MeshViewport>("Viewport")!;
+        var centre = viewport.TranslatePoint(new Point(viewport.Bounds.Width / 2, viewport.Bounds.Height / 2), window)!.Value;
+
+        window.MouseDown(centre, MouseButton.Left);
+        window.MouseMove(centre + new Point(80, 30));
+        window.MouseUp(centre + new Point(80, 30), MouseButton.Left);
+        Assert.NotEqual(0, viewport.Camera.Yaw);
+
+        window.MouseDown(centre, MouseButton.Right);
+        window.MouseMove(centre + new Point(50, 0));
+        window.MouseUp(centre + new Point(50, 0), MouseButton.Right);
+        Assert.NotEqual(Vector3.Zero, viewport.Camera.Target);
+
+        var elsewhere = centre + new Point(40, 40);
+        window.MouseDown(elsewhere, MouseButton.Left);
+        window.MouseUp(elsewhere, MouseButton.Left);
+        window.MouseDown(elsewhere, MouseButton.Left);
+        window.MouseUp(elsewhere, MouseButton.Left);
+        Assert.Equal(0, viewport.Camera.Yaw);
+        Assert.Equal(Vector3.Zero, viewport.Camera.Target);
     }
 
     // Set EASYCLOTHES_SAMPLES (and optionally EASYCLOTHES_SCREENSHOTS) to run against real assets.

@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.OpenGL;
 using Avalonia.OpenGL.Controls;
+using Avalonia.Rendering;
 using Avalonia.Threading;
 using EasyClothes.Core.Rage;
 using EasyClothes.Core.Textures;
@@ -19,7 +20,7 @@ public enum ShadingMode
     SolidWithWireframe,
 }
 
-public sealed class MeshViewport : OpenGlControlBase
+public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
 {
     public static readonly StyledProperty<ShadingMode> ShadingProperty =
         AvaloniaProperty.Register<MeshViewport, ShadingMode>(nameof(Shading));
@@ -34,8 +35,12 @@ public sealed class MeshViewport : OpenGlControlBase
     private RgbaImage? _pendingTexture;
     private bool _textureDirty;
     private Point? _dragOrigin;
+    private bool _panning;
+    private (Vector3 Min, Vector3 Max) _bounds;
 
     public Action<RgbaImage>? SnapshotRequested { get; set; }
+
+    public OrbitCamera Camera => _camera;
 
     public ShadingMode Shading
     {
@@ -46,11 +51,8 @@ public sealed class MeshViewport : OpenGlControlBase
     public void ShowMeshes(IReadOnlyList<MeshData> meshes)
     {
         _pendingMeshes = meshes;
-        var (min, max) = MeshBounds.Of(meshes);
-        _camera.Frame(min, max);
-        _camera.Yaw = 0;
-        _camera.Pitch = 0.15f;
-        RequestNextFrameRendering();
+        _bounds = MeshBounds.Of(meshes);
+        ResetCamera();
     }
 
     public void ShowTexture(RgbaImage? texture)
@@ -62,6 +64,7 @@ public sealed class MeshViewport : OpenGlControlBase
 
     public void ResetCamera()
     {
+        _camera.Frame(_bounds.Min, _bounds.Max);
         _camera.Yaw = 0;
         _camera.Pitch = 0.15f;
         RequestNextFrameRendering();
@@ -187,11 +190,22 @@ public sealed class MeshViewport : OpenGlControlBase
         }
     }
 
+    // The GL surface draws nothing Avalonia can hit-test, so claim the whole area for input.
+    public bool HitTest(Point point) => new Rect(Bounds.Size).Contains(point);
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+        var properties = e.GetCurrentPoint(this).Properties;
+        if (e.ClickCount == 2 && properties.IsLeftButtonPressed)
+        {
+            ResetCamera();
+            return;
+        }
+        _panning = !properties.IsLeftButtonPressed || e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         _dragOrigin = e.GetPosition(this);
         e.Pointer.Capture(this);
+        e.Handled = true;
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
@@ -199,7 +213,16 @@ public sealed class MeshViewport : OpenGlControlBase
         base.OnPointerMoved(e);
         if (_dragOrigin is not { } origin) return;
         var position = e.GetPosition(this);
-        _camera.Rotate((float)(position.X - origin.X) * 0.01f, (float)(position.Y - origin.Y) * 0.01f);
+        var delta = position - origin;
+        if (_panning)
+        {
+            var height = Math.Max(1, Bounds.Height);
+            _camera.Pan((float)(-delta.X * 2 / height), (float)(delta.Y * 2 / height));
+        }
+        else
+        {
+            _camera.Rotate((float)delta.X * 0.01f, (float)delta.Y * 0.01f);
+        }
         _dragOrigin = position;
         RequestNextFrameRendering();
     }
@@ -211,11 +234,18 @@ public sealed class MeshViewport : OpenGlControlBase
         e.Pointer.Capture(null);
     }
 
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        _dragOrigin = null;
+    }
+
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
         _camera.Zoom(MathF.Pow(0.9f, (float)e.Delta.Y));
         RequestNextFrameRendering();
+        e.Handled = true;
     }
 
     private unsafe void UploadPending(GL g)

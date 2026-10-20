@@ -25,6 +25,15 @@ public sealed class OrbitCamera
         Pitch = Math.Clamp(Pitch + deltaPitch, -MaxPitch, MaxPitch);
     }
 
+    public void Pan(float right, float up)
+    {
+        var forward = Vector3.Normalize(Target - Position);
+        var rightAxis = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitZ));
+        var upAxis = Vector3.Cross(rightAxis, forward);
+        var scale = Distance * MathF.Tan(FieldOfView / 2);
+        Target += (rightAxis * right + upAxis * up) * scale;
+    }
+
     public void Zoom(float factor) =>
         Distance = Math.Clamp(Distance * factor, MinDistance, MaxDistance);
 

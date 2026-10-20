@@ -77,7 +77,11 @@
           </StackPanel>
         </Border>
         <Border DockPanel.Dock="Bottom" Padding="10,4">
-          <TextBlock x:Name="PreviewStatus" Classes="muted" />
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Classes="muted" FontSize="11"
+                       Text="Arrastrar: girar · Clic derecho o Mayús: mover · Rueda: zoom · Doble clic: centrar" />
+            <TextBlock x:Name="PreviewStatus" Classes="muted" />
+          </DockPanel>
         </Border>
         <viewer:MeshViewport x:Name="Viewport" />
       </DockPanel>
