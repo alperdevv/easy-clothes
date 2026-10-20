@@ -1,7 +1,9 @@
 using System.Xml.Linq;
 using EasyClothes.Core.Export;
+using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Rage;
+using EasyClothes.Core.Textures;
 
 namespace EasyClothes.Core.Tests;
 
@@ -74,6 +76,34 @@ public sealed class ResourceExporterTests : IDisposable
         File.WriteAllText(Path.Combine(foreign, "fxmanifest.lua"), "fx_version 'cerulean'");
         Assert.Throws<IOException>(() => ResourceExporter.Export(project, _dir, foreign));
         Assert.True(File.Exists(Path.Combine(foreign, "fxmanifest.lua")));
+    }
+
+    [Fact]
+    public void Tattoos_become_texture_dictionaries_and_an_overlay_collection()
+    {
+        var png = Path.Combine(_dir, "dragón.png");
+        using (var file = File.Create(png))
+            PngWriter.Write(new RgbaImage(300, 200, Enumerable.Repeat((byte)200, 300 * 200 * 4).ToArray()), file);
+        var project = Project();
+        var imported = TattooImporter.Import(project, _dir, [png, Path.Combine(_dir, "notas.txt")], TattooZone.LeftArm);
+        imported.Added[0].Genders = [PedGender.Female];
+        imported.Added[0].UvX = 0.25f;
+
+        var result = ResourceExporter.Export(project, _dir, Output);
+
+        Assert.Single(imported.Warnings);
+        Assert.Equal(1, result.Tattoos);
+        var ytd = ResourceFile.Read(Path.Combine(Output, "stream", "tattoos", "ropa_tat_000.ytd"));
+        var texture = Assert.Single(TextureDictionary.Read(ytd));
+        Assert.Equal(("ropa_tat_000", 256, 128, "DXT5"), (texture.Name, texture.Width, texture.Height, texture.Format));
+
+        var item = Assert.Single(XDocument.Load(Path.Combine(Output, "ropa_overlays.xml")).Root!.Element("presetOverlays")!.Elements("Item"));
+        Assert.Equal("ropa_tat_000_F", item.Element("nameHash")?.Value);
+        Assert.Equal("ZONE_LEFT_ARM", item.Element("zone")?.Value);
+        Assert.Equal("GENDER_FEMALE", item.Element("gender")?.Value);
+        Assert.Equal("0.250000", item.Element("uvPos")?.Attribute("x")?.Value);
+        Assert.Contains("data_file 'PED_OVERLAY_FILE' 'ropa_overlays.xml'", File.ReadAllText(Path.Combine(Output, "fxmanifest.lua")));
+        Assert.Contains("ropa_tat_000_F", File.ReadAllText(Path.Combine(Output, "tattoos.json")));
     }
 
     private static ClothingProject Project(params Drawable[] drawables) =>

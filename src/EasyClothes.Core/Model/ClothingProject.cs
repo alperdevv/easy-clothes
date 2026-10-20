@@ -70,6 +70,13 @@ public sealed class Tattoo
     public List<PedGender> Genders { get; set; } = [PedGender.Male, PedGender.Female];
 
     public required string TexturePath { get; set; }
+
+    // Placement on the body part's UV space, as written to the overlay file.
+    public float UvX { get; set; } = 0.5f;
+    public float UvY { get; set; } = 0.5f;
+    public float ScaleX { get; set; } = 1f;
+    public float ScaleY { get; set; } = 1f;
+    public float Rotation { get; set; }
 }
 
 public enum TattooZone

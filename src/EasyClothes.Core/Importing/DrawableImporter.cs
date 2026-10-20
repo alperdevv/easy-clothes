@@ -2,7 +2,7 @@ using EasyClothes.Core.Model;
 
 namespace EasyClothes.Core.Importing;
 
-public sealed record ImportResult(IReadOnlyList<Drawable> Added, IReadOnlyList<string> Warnings);
+public sealed record ImportResult<T>(IReadOnlyList<T> Added, IReadOnlyList<string> Warnings);
 
 public static class DrawableImporter
 {
@@ -10,7 +10,7 @@ public static class DrawableImporter
 
     // Copies each model and the textures found next to it into the project folder,
     // so a project directory is self-contained and can be zipped or moved as is.
-    public static ImportResult Import(ClothingProject project, string projectDir, IEnumerable<string> modelPaths, PedGender fallbackGender)
+    public static ImportResult<Drawable> Import(ClothingProject project, string projectDir, IEnumerable<string> modelPaths, PedGender fallbackGender)
     {
         var added = new List<Drawable>();
         var warnings = new List<string>();
@@ -48,7 +48,7 @@ public static class DrawableImporter
             added.Add(drawable);
         }
 
-        return new ImportResult(added, warnings);
+        return new ImportResult<Drawable>(added, warnings);
     }
 
     private static List<string> FindTextures(string modelPath, ModelName model, PedGender gender)

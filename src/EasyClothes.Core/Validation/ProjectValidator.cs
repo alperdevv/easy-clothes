@@ -41,6 +41,14 @@ public static class ProjectValidator
         foreach (var group in project.Drawables.GroupBy(d => (d.Gender, d.Name)).Where(g => g.Count() > 1))
             issues.Add(new(IssueSeverity.Warning, $"Hay {group.Count()} prendas llamadas {group.Key.Name} ({group.Key.Gender})."));
 
+        foreach (var t in project.Tattoos)
+        {
+            if (!File.Exists(Path.Combine(projectDir, t.TexturePath)))
+                issues.Add(new(IssueSeverity.Error, $"Tatuaje {t.Name}: falta la imagen {t.TexturePath}."));
+            if (t.Genders.Count == 0)
+                issues.Add(new(IssueSeverity.Error, $"Tatuaje {t.Name}: elige al menos un sexo."));
+        }
+
         foreach (var group in project.Drawables.GroupBy(d => (d.Gender, d.Component, d.Prop)).Where(g => g.Count() > PedVariation.MaxDrawablesPerSlot))
             issues.Add(new(IssueSeverity.Error, $"{group.Count()} prendas en el mismo hueco ({group.Key.Gender}); el máximo es {PedVariation.MaxDrawablesPerSlot}."));
         if (project.Drawables.Where(d => d.IsProp).GroupBy(d => d.Gender).FirstOrDefault(g => g.Count() > PedVariation.MaxDrawablesPerSlot) is { } props)
