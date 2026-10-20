@@ -1,9 +1,16 @@
 using System.Globalization;
+using EasyClothes.Core.Importing;
+using EasyClothes.Core.Model;
+using EasyClothes.Core.Projects;
 using EasyClothes.Core.Rage;
 using EasyClothes.Core.Textures;
+using EasyClothes.Core.Validation;
 
 return args switch
 {
+    ["new", var dir, var name] => await NewProject(dir, name),
+    ["import", var project, .. var models] when models.Length > 0 => await Import(project, models),
+    ["validate", var project] => await Validate(project),
     ["inspect", var path] => Inspect(path),
     ["export-png", var path, var outDir] => ExportPng(path, outDir),
     ["export-obj", var path, var outDir] => ExportObj(path, outDir),
@@ -14,6 +21,9 @@ static int Usage()
 {
     Console.Error.WriteLine("""
         Usage:
+          easyclothes new <dir> <name>                 Create an empty project
+          easyclothes import <project> <file.ydd>...   Import models and the textures next to them
+          easyclothes validate <project>               List project problems (exit 1 on errors)
           easyclothes inspect <file.ydd|file.ytd>      Show resource header and list textures or drawables
           easyclothes export-png <file.ytd> <out-dir>  Decode every texture to PNG
           easyclothes export-obj <file.ydd> <out-dir>  Export each drawable's high LOD as Wavefront OBJ
@@ -125,4 +135,32 @@ static int ExportObj(string path, string outDir)
         Console.WriteLine(target);
     }
     return 0;
+}
+
+static async Task<int> NewProject(string dir, string name)
+{
+    Directory.CreateDirectory(dir);
+    var collection = new string(name.ToLowerInvariant().Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_').ToArray());
+    var path = Path.Combine(dir, collection + ProjectFile.Extension);
+    await ProjectFile.SaveAsync(new ClothingProject { Name = name, CollectionName = collection }, path);
+    Console.WriteLine(path);
+    return 0;
+}
+
+static async Task<int> Import(string projectPath, string[] models)
+{
+    var project = await ProjectFile.LoadAsync(projectPath);
+    var result = DrawableImporter.Import(project, Path.GetDirectoryName(Path.GetFullPath(projectPath))!, models, PedGender.Male);
+    await ProjectFile.SaveAsync(project, projectPath);
+    foreach (var d in result.Added) Console.WriteLine($"+ {d.Gender} {d.Name} ({d.Textures.Count} textures)");
+    foreach (var w in result.Warnings) Console.Error.WriteLine($"! {w}");
+    return 0;
+}
+
+static async Task<int> Validate(string projectPath)
+{
+    var issues = ProjectValidator.Validate(await ProjectFile.LoadAsync(projectPath), Path.GetDirectoryName(Path.GetFullPath(projectPath))!);
+    foreach (var i in issues) Console.WriteLine($"{(i.Severity == IssueSeverity.Error ? "error" : "warning")}: {i.Message}");
+    Console.WriteLine(issues.Count == 0 ? "No problems found." : $"{issues.Count} problem(s).");
+    return issues.Any(i => i.Severity == IssueSeverity.Error) ? 1 : 0;
 }

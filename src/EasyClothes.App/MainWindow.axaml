@@ -1,26 +1,156 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:viewer="using:EasyClothes.App.Viewer"
+        xmlns:vm="using:EasyClothes.App.ViewModels"
         x:Class="EasyClothes.App.MainWindow"
-        Title="EasyClothes" Width="1280" Height="800"
-        Background="#1B1D22">
+        x:DataType="vm:MainWindowViewModel"
+        Title="{Binding Title}" Width="1280" Height="800" WindowState="Maximized"
+        Background="{StaticResource WindowBrush}">
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+N" Command="{Binding NewProjectCommand}" />
+    <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenProjectCommand}" />
+    <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+    <KeyBinding Gesture="Ctrl+I" Command="{Binding ImportCommand}" />
+  </Window.KeyBindings>
+
   <DockPanel>
-    <Border DockPanel.Dock="Top" Background="#24272E" BorderBrush="#33373F" BorderThickness="0,0,0,1" Padding="8,6">
-      <StackPanel Orientation="Horizontal" Spacing="8">
-        <Button Content="Abrir modelo (.ydd)" Click="OnOpenModel" />
-        <Button Content="Abrir textura (.ytd)" Click="OnOpenTexture" />
-        <ComboBox x:Name="ShadingBox" SelectedIndex="0" Width="180" SelectionChanged="OnShadingChanged">
-          <ComboBoxItem Content="Sólido" />
-          <ComboBoxItem Content="Alámbrico" />
-          <ComboBoxItem Content="Sólido + alámbrico" />
-        </ComboBox>
-        <Button Content="Restablecer cámara" Click="OnResetCamera" />
+    <Border DockPanel.Dock="Top" Classes="bar" BorderThickness="0,0,0,1">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+        <Button Content="Nuevo" Command="{Binding NewProjectCommand}" ToolTip.Tip="Nuevo proyecto (Ctrl+N)" />
+        <Button Content="Abrir" Command="{Binding OpenProjectCommand}" ToolTip.Tip="Abrir proyecto (Ctrl+O)" />
+        <Button Content="Guardar" Command="{Binding SaveCommand}" ToolTip.Tip="Guardar (Ctrl+S)" />
+        <Rectangle Classes="separator" />
+        <Button Content="Importar prendas" Command="{Binding ImportCommand}" ToolTip.Tip="Importar .ydd con sus texturas (Ctrl+I)" />
+        <Button Content="Eliminar" Command="{Binding RemoveCommand}" />
       </StackPanel>
     </Border>
-    <Border DockPanel.Dock="Bottom" Background="#24272E" BorderBrush="#33373F" BorderThickness="0,1,0,0" Padding="10,4">
-      <TextBlock x:Name="StatusText" Foreground="#A0A6B0" FontSize="12"
-                 Text="Abre un .ydd para previsualizarlo. Arrastra para rotar, rueda para zoom." />
+
+    <Border DockPanel.Dock="Bottom" Classes="bar" BorderThickness="0,1,0,0">
+      <TextBlock Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
     </Border>
-    <viewer:MeshViewport x:Name="Viewport" />
+
+    <Grid RowDefinitions="*,4,180" ColumnDefinitions="280,4,*,4,320">
+      <DockPanel Grid.Row="0" Grid.Column="0">
+        <TextBlock DockPanel.Dock="Top" Classes="header" Text="PROYECTO" />
+        <Panel>
+          <TreeView ItemsSource="{Binding Tree}" SelectedItem="{Binding SelectedNode}" IsVisible="{Binding HasProject}">
+            <TreeView.ItemContainerTheme>
+              <ControlTheme TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}" x:DataType="vm:TreeNode">
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded}" />
+              </ControlTheme>
+            </TreeView.ItemContainerTheme>
+            <TreeView.ItemTemplate>
+              <TreeDataTemplate DataType="vm:TreeNode" ItemsSource="{Binding Children}">
+                <TextBlock Text="{Binding Title}" />
+              </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+          </TreeView>
+          <TextBlock Classes="muted" Margin="12" TextWrapping="Wrap" IsVisible="{Binding !HasProject}"
+                     Text="Crea un proyecto (Ctrl+N) o abre uno existente (Ctrl+O)." />
+        </Panel>
+      </DockPanel>
+
+      <GridSplitter Grid.Row="0" Grid.Column="1" Classes="vertical" />
+
+      <DockPanel Grid.Row="0" Grid.Column="2">
+        <Border DockPanel.Dock="Top" Classes="bar" BorderThickness="0,0,0,1">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Classes="muted" Text="Textura" VerticalAlignment="Center" />
+            <ComboBox ItemsSource="{Binding Selected.Textures, FallbackValue={x:Null}}" SelectedItem="{Binding SelectedTexture}"
+                      IsEnabled="{Binding HasSelection}" MinWidth="220">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:TextureItem">
+                  <TextBlock>
+                    <Run Text="{Binding Letter}" FontWeight="SemiBold" />
+                    <Run Text="  " />
+                    <Run Text="{Binding FileName}" />
+                  </TextBlock>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <ComboBox x:Name="ShadingBox" SelectedIndex="0" Width="170" SelectionChanged="OnShadingChanged">
+              <ComboBoxItem Content="Sólido" />
+              <ComboBoxItem Content="Alámbrico" />
+              <ComboBoxItem Content="Sólido + alámbrico" />
+            </ComboBox>
+            <Button Content="Centrar" Click="OnResetCamera" />
+          </StackPanel>
+        </Border>
+        <Border DockPanel.Dock="Bottom" Padding="10,4">
+          <TextBlock x:Name="PreviewStatus" Classes="muted" />
+        </Border>
+        <viewer:MeshViewport x:Name="Viewport" />
+      </DockPanel>
+
+      <GridSplitter Grid.Row="0" Grid.Column="3" Classes="vertical" />
+
+      <ScrollViewer Grid.Row="0" Grid.Column="4">
+        <StackPanel Spacing="4">
+          <TextBlock Classes="header" Text="PROYECTO" IsVisible="{Binding HasProject}" />
+          <StackPanel Classes="form" IsVisible="{Binding HasProject}">
+            <TextBlock Classes="label" Text="Nombre de colección" />
+            <TextBox Text="{Binding CollectionName}" />
+          </StackPanel>
+
+          <TextBlock Classes="header" Text="PRENDA" IsVisible="{Binding HasSelection}" />
+          <StackPanel Classes="form" DataContext="{Binding Selected}" IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).HasSelection}"
+                      x:DataType="vm:DrawableViewModel">
+            <TextBlock Classes="label" Text="Nombre" />
+            <TextBox Text="{Binding Name}" />
+            <TextBlock Classes="label" Text="Género" />
+            <ComboBox ItemsSource="{x:Static vm:GenderOption.All}" SelectedItem="{Binding Gender}" HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:GenderOption">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Classes="label" Text="Hueco" />
+            <ComboBox ItemsSource="{x:Static vm:SlotOption.All}" SelectedItem="{Binding Slot}" HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:SlotOption">
+                  <TextBlock Text="{Binding Display}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <CheckBox Content="Oculta el pelo" IsChecked="{Binding HideHair}" Margin="0,8,0,0" />
+            <CheckBox Content="Se cae al recibir un golpe" IsChecked="{Binding KnockOffOnHit}" IsVisible="{Binding IsProp}" />
+            <TextBlock Classes="label" Text="{Binding Summary}" Margin="0,12,0,0" />
+            <ItemsControl ItemsSource="{Binding Textures}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:TextureItem">
+                  <TextBlock Classes="muted" TextTrimming="CharacterEllipsis">
+                    <Run Text="{Binding Letter}" FontWeight="SemiBold" />
+                    <Run Text="  " />
+                    <Run Text="{Binding FileName}" />
+                  </TextBlock>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+
+      <GridSplitter Grid.Row="1" Grid.ColumnSpan="5" Classes="horizontal" />
+
+      <DockPanel Grid.Row="2" Grid.ColumnSpan="5">
+        <Border DockPanel.Dock="Top" Classes="bar" BorderThickness="0,0,0,1">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <TextBlock Classes="header-inline" Text="PROBLEMAS" />
+            <TextBlock Classes="muted" Text="{Binding IssueSummary}" />
+          </StackPanel>
+        </Border>
+        <ListBox ItemsSource="{Binding Issues}" x:Name="IssuesList" DoubleTapped="OnIssueActivated">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:IssueViewModel">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="{Binding Icon}" Classes.error="{Binding IsError}" Classes.warning="{Binding !IsError}" Width="14" />
+                <TextBlock Text="{Binding Message}" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+    </Grid>
   </DockPanel>
 </Window>

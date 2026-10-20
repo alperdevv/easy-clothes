@@ -2,7 +2,57 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="EasyClothes.App.App"
              RequestedThemeVariant="Dark">
+  <Application.Resources>
+    <SolidColorBrush x:Key="WindowBrush" Color="#1B1D22" />
+    <SolidColorBrush x:Key="BarBrush" Color="#24272E" />
+    <SolidColorBrush x:Key="LineBrush" Color="#33373F" />
+    <SolidColorBrush x:Key="MutedBrush" Color="#A0A6B0" />
+  </Application.Resources>
   <Application.Styles>
     <FluentTheme />
+    <Style Selector="Border.bar">
+      <Setter Property="Background" Value="{StaticResource BarBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+      <Setter Property="Padding" Value="8,6" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.header">
+      <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Margin" Value="12,12,12,6" />
+    </Style>
+    <Style Selector="TextBlock.header-inline">
+      <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.label">
+      <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Margin" Value="0,6,0,2" />
+    </Style>
+    <Style Selector="TextBlock.error">
+      <Setter Property="Foreground" Value="#F0616D" />
+    </Style>
+    <Style Selector="TextBlock.warning">
+      <Setter Property="Foreground" Value="#E5B454" />
+    </Style>
+    <Style Selector="StackPanel.form">
+      <Setter Property="Margin" Value="12,0,12,8" />
+    </Style>
+    <Style Selector="Rectangle.separator">
+      <Setter Property="Width" Value="1" />
+      <Setter Property="Margin" Value="4,4" />
+      <Setter Property="Fill" Value="{StaticResource LineBrush}" />
+    </Style>
+    <Style Selector="GridSplitter">
+      <Setter Property="Background" Value="{StaticResource LineBrush}" />
+    </Style>
   </Application.Styles>
 </Application>
