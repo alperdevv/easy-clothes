@@ -93,6 +93,34 @@ public class SampleFilesTests
         }
     }
 
+    [Fact]
+    public void Sample_meshes_survive_reduction()
+    {
+        var dir = Directory.CreateTempSubdirectory("easyclothes-samples-").FullName;
+        try
+        {
+            foreach (var source in Samples("*.ydd").Where((_, i) => i % 10 == 0))
+            {
+                var copy = Path.Combine(dir, Path.GetFileName(source));
+                File.Copy(source, copy);
+                var before = DrawableDictionary.Read(ResourceFile.Read(copy));
+
+                var result = Meshes.MeshReducer.Reduce(copy, before.Sum(d => d.Lods[0].Triangles) / 2);
+
+                var after = DrawableDictionary.Read(ResourceFile.Read(copy), includeMeshes: true);
+                Assert.True(result.NewTriangles <= result.OldTriangles, source);
+                Assert.Equal(result.NewTriangles, after.Sum(d => d.Lods[0].Triangles));
+                foreach (var g in after.SelectMany(d => d.Lods).SelectMany(l => l.Models).SelectMany(m => m))
+                    Assert.True(g.Indices == g.Triangles * 3 && g.Mesh!.VertexCount == g.Vertices, source);
+                Assert.Equal(before.Select(d => d.Lods.Skip(1).Sum(l => l.Triangles)), after.Select(d => d.Lods.Skip(1).Sum(l => l.Triangles)));
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     private static IEnumerable<string> Samples(string pattern) =>
         SamplesDir is null ? [] : Directory.EnumerateFiles(SamplesDir, pattern, SearchOption.AllDirectories);
 }

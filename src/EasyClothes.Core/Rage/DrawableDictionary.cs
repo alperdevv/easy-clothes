@@ -11,6 +11,7 @@ public enum LodLevel
 public sealed record GeometryInfo(int Vertices, int Indices, int Triangles, int VertexStride)
 {
     public MeshData? Mesh { get; init; }
+    internal ulong Pointer { get; init; }
 }
 
 public sealed record LodInfo(LodLevel Level, IReadOnlyList<IReadOnlyList<GeometryInfo>> Models)
@@ -26,27 +27,27 @@ public static class DrawableDictionary
     public const uint ResourceVersion = 165;
 
     private static readonly ulong[] DrawableLodLists = [0x50, 0x58, 0x60, 0x68];
-    private const ulong DrawableName = 0xA8;
+    internal const ulong DrawableName = 0xA8;
 
-    private const ulong ModelGeometries = 0x08;
+    internal const ulong ModelGeometries = 0x08;
 
-    private const ulong GeometryIndices = 0x58;
-    private const ulong GeometryTriangles = 0x5C;
-    private const ulong GeometryVertices = 0x60;
-    private const ulong GeometryVertexBuffer = 0x18;
-    private const ulong GeometryIndexBuffer = 0x38;
-    private const ulong GeometryStride = 0x70;
+    internal const ulong GeometryIndices = 0x58;
+    internal const ulong GeometryTriangles = 0x5C;
+    internal const ulong GeometryVertices = 0x60;
+    internal const ulong GeometryVertexBuffer = 0x18;
+    internal const ulong GeometryIndexBuffer = 0x38;
+    internal const ulong GeometryStride = 0x70;
 
-    private const ulong VertexBufferCount = 0x18;
-    private const ulong VertexBufferData = 0x20;
-    private const ulong VertexBufferDeclaration = 0x30;
+    internal const ulong VertexBufferCount = 0x18;
+    internal const ulong VertexBufferData = 0x20;
+    internal const ulong VertexBufferDeclaration = 0x30;
 
-    private const ulong DeclarationFlags = 0x00;
-    private const ulong DeclarationStride = 0x04;
-    private const ulong DeclarationTypes = 0x08;
+    internal const ulong DeclarationFlags = 0x00;
+    internal const ulong DeclarationStride = 0x04;
+    internal const ulong DeclarationTypes = 0x08;
 
-    private const ulong IndexBufferCount = 0x08;
-    private const ulong IndexBufferData = 0x10;
+    internal const ulong IndexBufferCount = 0x08;
+    internal const ulong IndexBufferData = 0x10;
 
     public static IReadOnlyList<DrawableInfo> Read(ResourceFile resource, bool includeMeshes = false)
     {
@@ -76,6 +77,7 @@ public static class DrawableDictionary
                         reader.UInt16(g + GeometryStride))
                     {
                         Mesh = includeMeshes ? ReadMesh(reader, g) : null,
+                        Pointer = g,
                     })
                     .ToList())
                 .ToList();

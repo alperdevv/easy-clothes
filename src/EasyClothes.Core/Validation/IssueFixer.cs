@@ -1,3 +1,4 @@
+using EasyClothes.Core.Meshes;
 using EasyClothes.Core.Textures;
 
 namespace EasyClothes.Core.Validation;
@@ -22,7 +23,8 @@ public static class IssueFixer
         {
             ResizeTextureFix f => Describe(TextureOptimizer.Optimize(path, f.MaxSide)),
             RegenerateMipsFix => Describe(TextureOptimizer.Optimize(path, int.MaxValue)),
-            _ => throw new NotSupportedException($"{fix.Label}: todavía no está disponible."),
+            ReduceMeshFix f => Describe(MeshReducer.Reduce(path, f.TargetTriangles)),
+            _ => throw new NotSupportedException(fix.GetType().Name),
         };
         return $"{Path.GetFileName(relative)}: {summary} Copia del original en {backup}.";
     }
@@ -35,6 +37,9 @@ public static class IssueFixer
         File.Copy(Path.Combine(projectDir, relative), full, overwrite: true);
         return target.Replace('\\', '/');
     }
+
+    private static string Describe(MeshReduction result) =>
+        $"{result.OldTriangles:N0} → {result.NewTriangles:N0} triángulos, {result.OldVertices:N0} → {result.NewVertices:N0} vértices.";
 
     private static string Describe(TextureOptimization result) =>
         string.Join(", ", result.Changes.Select(c => $"{c.OldWidth}x{c.OldHeight} {c.OldFormat} → {c.NewWidth}x{c.NewHeight} {c.NewFormat.ToString().ToUpperInvariant()} ({c.Mips} mips)"))

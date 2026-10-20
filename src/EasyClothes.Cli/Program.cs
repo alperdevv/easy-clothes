@@ -1,6 +1,7 @@
 using System.Globalization;
 using EasyClothes.Core.Analysis;
 using EasyClothes.Core.Importing;
+using EasyClothes.Core.Meshes;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Projects;
 using EasyClothes.Core.Rage;
@@ -15,6 +16,7 @@ return args switch
     ["inspect", var path] => Inspect(path),
     ["stats", var dir] => Stats(dir),
     ["optimize-texture", var path, var maxSide] => OptimizeTexture(path, int.Parse(maxSide)),
+    ["reduce-mesh", var path, var triangles] => ReduceMesh(path, int.Parse(triangles)),
     ["export-png", var path, var outDir] => ExportPng(path, outDir),
     ["export-obj", var path, var outDir] => ExportObj(path, outDir),
     _ => Usage(),
@@ -29,6 +31,7 @@ static int Usage()
           easyclothes validate <project>               List project problems (exit 1 on errors)
           easyclothes inspect <file.ydd|file.ytd>      Show resource header and list textures or drawables
           easyclothes optimize-texture <file.ytd> <max-side>  Resize, regenerate mips and recompress in place
+          easyclothes reduce-mesh <file.ydd> <triangles>      Simplify the high LOD in place
           easyclothes export-png <file.ytd> <out-dir>  Decode every texture to PNG
           easyclothes export-obj <file.ydd> <out-dir>  Export each drawable's high LOD as Wavefront OBJ
         """);
@@ -204,5 +207,12 @@ static int OptimizeTexture(string path, int maxSide)
     foreach (var c in result.Changes)
         Console.WriteLine($"{c.Name}: {c.OldWidth}x{c.OldHeight} {c.OldFormat} -> {c.NewWidth}x{c.NewHeight} {c.NewFormat}, {c.Mips} mips");
     Console.WriteLine($"File {result.OldFileSize:N0} -> {result.NewFileSize:N0} bytes, graphics memory {result.OldGraphicsSize / 1024:N0} -> {result.NewGraphicsSize / 1024:N0} KiB");
+    return 0;
+}
+
+static int ReduceMesh(string path, int triangles)
+{
+    var result = MeshReducer.Reduce(path, triangles);
+    Console.WriteLine($"Triangles {result.OldTriangles:N0} -> {result.NewTriangles:N0}, vertices {result.OldVertices:N0} -> {result.NewVertices:N0}");
     return 0;
 }

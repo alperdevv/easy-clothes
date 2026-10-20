@@ -20,6 +20,14 @@ public sealed class ResourceReader(ResourceFile resource)
         return segment.AsSpan((int)offset, length);
     }
 
+    internal Span<byte> Writable(ulong pointer, int length)
+    {
+        var (segment, offset) = Resolve(pointer);
+        if (offset + (long)length > segment.Length)
+            throw new InvalidDataException($"Pointer 0x{pointer:X} + {length} runs past its segment ({segment.Length} bytes).");
+        return segment.AsSpan((int)offset, length);
+    }
+
     public ushort UInt16(ulong pointer) => BinaryPrimitives.ReadUInt16LittleEndian(At(pointer, 2));
     public uint UInt32(ulong pointer) => BinaryPrimitives.ReadUInt32LittleEndian(At(pointer, 4));
     public ulong UInt64(ulong pointer) => BinaryPrimitives.ReadUInt64LittleEndian(At(pointer, 8));
