@@ -79,12 +79,12 @@ public static class ProjectValidator
         }
         catch (Exception ex) when (ex is InvalidDataException or NotSupportedException)
         {
-            issues.Add(new(IssueSeverity.Error, $"{d.Name}: la textura {Path.GetFileName(relative)} no se puede leer ({ex.Message}).", d.Id));
+            issues.Add(new(IssueSeverity.Error, $"{d.Name}: la textura {ShortName(relative)} no se puede leer ({ex.Message}).", d.Id));
             return;
         }
 
         CheckOversized(issues, d, relative, report.SystemSize, report.GraphicsSize);
-        var name = Path.GetFileName(relative);
+        var name = ShortName(relative);
         foreach (var t in report.Textures)
         {
             var side = Math.Max(t.Width, t.Height);
@@ -104,7 +104,13 @@ public static class ProjectValidator
     {
         var largest = Math.Max(systemSize, graphicsSize);
         if (largest > AnalysisLimits.FiveMOversizedBytes)
-            issues.Add(new(IssueSeverity.Error, $"{d.Name}: {Path.GetFileName(relative)} ocupa {largest / 1048576.0:N1} MiB en memoria; FiveM avisa a partir de 16 MiB y puede no cargarlo.", d.Id));
+            issues.Add(new(IssueSeverity.Error, $"{d.Name}: {ShortName(relative)} ocupa {largest / 1048576.0:N1} MiB en memoria; FiveM avisa a partir de 16 MiB y puede no cargarlo.", d.Id));
+    }
+
+    private static string ShortName(string path)
+    {
+        var name = Path.GetFileName(path);
+        return name[(name.IndexOf('^') + 1)..];
     }
 
     private static int RoundDownPow2(int value) => 1 << (31 - System.Numerics.BitOperations.LeadingZeroCount((uint)value));

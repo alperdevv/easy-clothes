@@ -119,11 +119,10 @@
             <ItemsControl ItemsSource="{Binding Textures}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:TextureItem">
-                  <TextBlock Classes="muted" TextTrimming="CharacterEllipsis">
-                    <Run Text="{Binding Letter}" FontWeight="SemiBold" />
-                    <Run Text="  " />
-                    <Run Text="{Binding FileName}" />
-                  </TextBlock>
+                  <Grid ColumnDefinitions="18,*">
+                    <TextBlock Classes="muted" Text="{Binding Letter}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Classes="muted" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" />
+                  </Grid>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
@@ -135,18 +134,27 @@
 
       <DockPanel Grid.Row="2" Grid.ColumnSpan="5">
         <Border DockPanel.Dock="Top" Classes="bar" BorderThickness="0,0,0,1">
-          <StackPanel Orientation="Horizontal" Spacing="10">
-            <TextBlock Classes="header-inline" Text="PROBLEMAS" />
-            <TextBlock Classes="muted" Text="{Binding IssueSummary}" />
-          </StackPanel>
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Content="Corregir todo" Command="{Binding FixAllCommand}"
+                    IsVisible="{Binding HasFixes}" ToolTip.Tip="Aplica todas las correcciones automáticas (se guarda copia en .backups)" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <TextBlock Classes="header-inline" Text="PROBLEMAS" />
+              <TextBlock Classes="muted" Text="{Binding IssueSummary}" />
+            </StackPanel>
+          </DockPanel>
         </Border>
         <ListBox ItemsSource="{Binding Issues}" x:Name="IssuesList" DoubleTapped="OnIssueActivated">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:IssueViewModel">
-              <StackPanel Orientation="Horizontal" Spacing="8">
-                <TextBlock Text="{Binding Icon}" Classes.error="{Binding IsError}" Classes.warning="{Binding !IsError}" Width="14" />
-                <TextBlock Text="{Binding Message}" />
-              </StackPanel>
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Classes="small" Content="{Binding FixLabel}" IsVisible="{Binding HasFix}"
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ApplyFixCommand}" CommandParameter="{Binding}" />
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding Icon}" Width="14" TextAlignment="Center"
+                             Classes.error="{Binding IsError}" Classes.warning="{Binding IsWarning}" Classes.info="{Binding IsInfo}" />
+                  <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+                </StackPanel>
+              </DockPanel>
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>

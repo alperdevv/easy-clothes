@@ -43,6 +43,13 @@
     <Style Selector="TextBlock.warning">
       <Setter Property="Foreground" Value="#E5B454" />
     </Style>
+    <Style Selector="TextBlock.info">
+      <Setter Property="Foreground" Value="#7FA7D9" />
+    </Style>
+    <Style Selector="Button.small">
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
     <Style Selector="StackPanel.form">
       <Setter Property="Margin" Value="12,0,12,8" />
     </Style>

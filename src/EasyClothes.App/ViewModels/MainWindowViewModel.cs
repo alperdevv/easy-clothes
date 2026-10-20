@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EasyClothes.App.Services;
+using EasyClothes.Core.Analysis;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Projects;
@@ -11,7 +12,17 @@ namespace EasyClothes.App.ViewModels;
 
 public sealed partial class MainWindowViewModel(IDialogService dialogs) : ObservableObject
 {
+    private readonly AnalysisCache _analysisCache = new();
     private int _previewVersion;
+    private int _validationVersion;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand))]
+    public partial bool IsBusy { get; private set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IssueSummary))]
+    public partial bool IsAnalyzing { get; private set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasProject), nameof(Title))]
@@ -46,6 +57,8 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     public ObservableCollection<IssueViewModel> Issues { get; } = [];
 
     public bool HasProject => Project is not null;
+    public bool HasFixes => Issues.Any(i => i.HasFix);
+    private bool CanFix => !IsBusy && ProjectDir is not null;
     public bool HasSelection => Selected is not null;
     public string Title => Project is null ? "EasyClothes" : $"EasyClothes — {Project.Name}{(IsDirty ? " *" : "")}";
 
@@ -53,8 +66,9 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     {
         get
         {
-            var errors = Issues.Count(i => i.IsError);
-            return Issues.Count == 0 ? "Sin problemas" : $"{errors} errores · {Issues.Count - errors} avisos";
+            if (IsAnalyzing) return "Analizando…";
+            if (Issues.Count == 0) return "Sin problemas";
+            return $"{Issues.Count(i => i.IsError)} errores · {Issues.Count(i => i.IsWarning)} avisos · {Issues.Count(i => i.IsInfo)} info";
         }
     }
 
@@ -100,7 +114,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         {
             LoadProject(await ProjectFile.LoadAsync(path), Path.GetDirectoryName(Path.GetFullPath(path))!);
             Status = $"Proyecto abierto: {path}";
-            if (Project!.Drawables.FirstOrDefault() is { } first) Select(first.Id);
+            SelectedNode = Tree.SelectMany(g => g.Children).SelectMany(s => s.Children).FirstOrDefault();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException)
         {
@@ -135,6 +149,63 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         Project!.Drawables.Remove(Selected!.Model);
         MarkChanged(rebuildTree: true);
     }
+
+    [RelayCommand(CanExecute = nameof(CanFix))]
+    private async Task ApplyFixAsync(IssueViewModel? issue)
+    {
+        if (issue?.Issue.Fix is not { } fix) return;
+        await RunFixesAsync([fix]);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanFix))]
+    private async Task FixAllAsync()
+    {
+        // A resize also regenerates mips, so one fix per file is enough.
+        var fixes = Issues.Select(i => i.Issue.Fix).OfType<FixAction>()
+            .GroupBy(TargetOf)
+            .Select(g => g.OfType<ResizeTextureFix>().FirstOrDefault() ?? g.First())
+            .ToList();
+        await RunFixesAsync(fixes);
+    }
+
+    private async Task RunFixesAsync(IReadOnlyList<FixAction> fixes)
+    {
+        if (fixes.Count == 0) return;
+        IsBusy = true;
+        try
+        {
+            var dir = ProjectDir!;
+            var messages = new List<string>();
+            for (var i = 0; i < fixes.Count; i++)
+            {
+                Status = $"Corrigiendo {i + 1}/{fixes.Count}: {fixes[i].Label}…";
+                var fix = fixes[i];
+                try
+                {
+                    messages.Add(await Task.Run(() => IssueFixer.Apply(fix, dir)));
+                }
+                catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
+                {
+                    messages.Add($"{TargetOf(fix)}: no se pudo corregir ({ex.Message}).");
+                }
+            }
+            Status = fixes.Count == 1 ? messages[0] : $"{fixes.Count} correcciones aplicadas. {messages.Last()}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+        await ValidateAsync();
+        await LoadPreviewAsync();
+    }
+
+    private static string TargetOf(FixAction fix) => fix switch
+    {
+        ResizeTextureFix f => f.TexturePath,
+        RegenerateMipsFix f => f.TexturePath,
+        ReduceMeshFix f => f.ModelPath,
+        _ => fix.Label,
+    };
 
     [RelayCommand]
     private void SelectIssue(IssueViewModel? issue)
@@ -183,14 +254,14 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         IsDirty = false;
         OnPropertyChanged(nameof(CollectionName));
         RebuildTree();
-        Validate();
+        _ = ValidateAsync();
     }
 
     private void MarkChanged(bool rebuildTree)
     {
         IsDirty = true;
         if (rebuildTree) RebuildTree();
-        Validate();
+        _ = ValidateAsync();
     }
 
     private void OnDrawableChanged(DrawableViewModel drawable, bool regroup)
@@ -210,7 +281,8 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
             var genderNode = new TreeNode(gender.Label);
             foreach (var slot in SlotOption.All)
             {
-                var drawables = Project.DrawablesFor(gender.Value).Where(d => SlotOption.For(d) == slot).ToList();
+                var drawables = Project.DrawablesFor(gender.Value).Where(d => SlotOption.For(d) == slot)
+                    .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList();
                 if (drawables.Count == 0) continue;
                 var slotNode = new TreeNode($"{slot.Label} ({drawables.Count})");
                 foreach (var d in drawables)
@@ -238,15 +310,33 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     private TreeNode? FindNode(Guid id) =>
         Tree.SelectMany(g => g.Children).SelectMany(s => s.Children).FirstOrDefault(n => n.Drawable?.Model.Id == id);
 
-    private void Validate()
+    private async Task ValidateAsync()
     {
-        Issues.Clear();
-        if (Project is not null)
+        var version = ++_validationVersion;
+        if (Project is not { } project || ProjectDir is not { } dir)
         {
-            foreach (var issue in ProjectValidator.Validate(Project, ProjectDir!).OrderBy(i => i.Severity))
-                Issues.Add(new IssueViewModel(issue));
+            Issues.Clear();
+            OnPropertyChanged(nameof(IssueSummary));
+            return;
         }
-        OnPropertyChanged(nameof(IssueSummary));
+
+        IsAnalyzing = true;
+        var snapshot = ProjectFile.Deserialize(ProjectFile.Serialize(project));
+        IReadOnlyList<ValidationIssue> issues;
+        try
+        {
+            issues = await Task.Run(() => ProjectValidator.Validate(snapshot, dir, _analysisCache));
+        }
+        catch (IOException ex)
+        {
+            issues = [new ValidationIssue(IssueSeverity.Error, $"No se pudo analizar el proyecto: {ex.Message}")];
+        }
+        if (version != _validationVersion) return;
+
+        Issues.Clear();
+        foreach (var issue in issues.OrderBy(i => i.Severity)) Issues.Add(new IssueViewModel(issue));
+        IsAnalyzing = false;
+        OnPropertyChanged(nameof(HasFixes));
     }
 
     private static string ProjectPathFor(string dir, ClothingProject project) =>
