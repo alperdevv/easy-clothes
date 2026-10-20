@@ -7,6 +7,7 @@ namespace EasyClothes.Core.Projects;
 public static class ProjectFile
 {
     public const string Extension = ".ecproj";
+    public const string BackupsFolder = ".backups";
 
     private static readonly JsonSerializerOptions Options = new()
     {

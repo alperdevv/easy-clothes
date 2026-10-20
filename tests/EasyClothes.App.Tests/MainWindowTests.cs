@@ -128,6 +128,24 @@ public sealed class MainWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Packing_saves_a_backup_and_the_package_reopens_elsewhere()
+    {
+        var path = await SaveProject(new ClothingProject { Name = "UI", CollectionName = "ui" });
+        var window = new MainWindow();
+        window.Show();
+        await window.ViewModel.OpenProjectFileAsync(path);
+        window.ViewModel.CollectionName = "ui_nueva";
+        var package = Path.Combine(_dir, "ui.ecpack");
+
+        await window.ViewModel.PackProjectAsync(package);
+        Assert.Single(Directory.GetFiles(Path.Combine(_dir, ProjectFile.BackupsFolder, "project")));
+
+        await window.ViewModel.UnpackProjectAsync(package, Path.Combine(_dir, "copia"));
+        Assert.Equal("ui_nueva", window.ViewModel.CollectionName);
+        Assert.Equal(Path.Combine(_dir, "copia"), window.ViewModel.ProjectDir);
+    }
+
+    [AvaloniaFact]
     public void Dragging_in_the_viewer_orbits_pans_and_double_click_recentres()
     {
         var window = new MainWindow { Width = 1200, Height = 800 };

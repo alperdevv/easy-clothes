@@ -15,6 +15,8 @@ return args switch
     ["import", var project, .. var models] when models.Length > 0 => await Import(project, models),
     ["validate", var project] => await Validate(project),
     ["build", var project, var outDir] => await Build(project, outDir),
+    ["pack", var project, var package] => Pack(project, package),
+    ["unpack", var package, var dir] => Unpack(package, dir),
     ["inspect", var path] => Inspect(path),
     ["stats", var dir] => Stats(dir),
     ["optimize-texture", var path, var maxSide] => OptimizeTexture(path, int.Parse(maxSide)),
@@ -32,6 +34,8 @@ static int Usage()
           easyclothes import <project> <file.ydd>...   Import models and the textures next to them
           easyclothes validate <project>               List project problems (exit 1 on errors)
           easyclothes build <project> <out-dir>        Generate the FiveM resource (fxmanifest, stream, .ymt, .meta)
+          easyclothes pack <project> <file.ecpack>     Zip the project with its assets
+          easyclothes unpack <file.ecpack> <dir>       Extract a packaged project into an empty folder
           easyclothes inspect <file.ydd|file.ytd>      Show resource header and list textures or drawables
           easyclothes optimize-texture <file.ytd> <max-side>  Resize, regenerate mips and recompress in place
           easyclothes reduce-mesh <file.ydd> <triangles>      Simplify the high LOD in place
@@ -190,6 +194,18 @@ static async Task<int> Build(string projectPath, string outDir)
         foreach (var e in ex.Errors) Console.Error.WriteLine($"error: {e}");
         return 1;
     }
+}
+
+static int Pack(string projectPath, string package)
+{
+    Console.WriteLine($"{ProjectPackage.Export(projectPath, package)} file(s) packed into {package}");
+    return 0;
+}
+
+static int Unpack(string package, string dir)
+{
+    Console.WriteLine($"Project extracted: {ProjectPackage.Import(package, dir)}");
+    return 0;
 }
 
 static int Stats(string dir)

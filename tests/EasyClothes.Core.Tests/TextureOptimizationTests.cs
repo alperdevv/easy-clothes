@@ -85,6 +85,6 @@ public sealed class TextureOptimizationTests : IDisposable
         Assert.Equal(2, textureIssues.Count);
         IssueFixer.Apply(textureIssues.First(i => i.Fix is ResizeTextureFix).Fix!, _dir);
         Assert.DoesNotContain(ProjectValidator.Validate(project, _dir, cache, limits), i => i.Fix is not null);
-        Assert.Single(Directory.EnumerateFiles(Path.Combine(_dir, IssueFixer.BackupsFolder), "hat.ytd", SearchOption.AllDirectories));
+        Assert.Single(Directory.EnumerateFiles(Path.Combine(_dir, EasyClothes.Core.Projects.ProjectFile.BackupsFolder), "hat.ytd", SearchOption.AllDirectories));
     }
 }

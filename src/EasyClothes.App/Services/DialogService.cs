@@ -21,4 +21,16 @@ public sealed class DialogService(TopLevel topLevel) : IDialogService
         var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = title });
         return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
     }
+
+    public async Task<string?> PickSaveFileAsync(string title, string suggestedName, string description, string extension)
+    {
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = title,
+            SuggestedFileName = suggestedName,
+            DefaultExtension = extension,
+            FileTypeChoices = [new FilePickerFileType(description) { Patterns = ["*" + extension] }],
+        });
+        return file?.TryGetLocalPath();
+    }
 }

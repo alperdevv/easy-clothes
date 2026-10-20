@@ -19,7 +19,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     private int _validationVersion;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand), nameof(PackProjectCommand))]
     public partial bool IsBusy { get; private set; }
 
     [ObservableProperty]
@@ -32,7 +32,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     public partial ClothingProject? Project { get; private set; }
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand), nameof(PackProjectCommand))]
     public partial string? ProjectDir { get; private set; }
 
     [ObservableProperty]
@@ -135,9 +135,60 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     [RelayCommand(CanExecute = nameof(HasProject))]
     private async Task SaveAsync()
     {
-        await ProjectFile.SaveAsync(Project!, ProjectPathFor(ProjectDir!, Project!));
+        var path = ProjectPathFor(ProjectDir!, Project!);
+        ProjectPackage.BackupProjectFile(path);
+        await ProjectFile.SaveAsync(Project!, path);
         IsDirty = false;
         Status = "Proyecto guardado.";
+    }
+
+    [RelayCommand(CanExecute = nameof(CanFix))]
+    private async Task PackProjectAsync()
+    {
+        var target = await dialogs.PickSaveFileAsync("Exportar proyecto", Project!.CollectionName + ProjectPackage.Extension, "Paquete EasyClothes", ProjectPackage.Extension);
+        if (target is not null) await PackProjectAsync(target);
+    }
+
+    public async Task PackProjectAsync(string packagePath)
+    {
+        await SaveAsync();
+        var projectPath = ProjectPathFor(ProjectDir!, Project!);
+        IsBusy = true;
+        try
+        {
+            var files = await Task.Run(() => ProjectPackage.Export(projectPath, packagePath));
+            Status = $"Proyecto exportado a {packagePath} ({files} archivos).";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Status = $"No se pudo exportar el proyecto: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task UnpackProjectAsync()
+    {
+        var files = await dialogs.PickFilesAsync("Importar proyecto", "Paquete EasyClothes", ["*" + ProjectPackage.Extension], multiple: false);
+        if (files.Count == 0) return;
+        if (await dialogs.PickFolderAsync("Carpeta vacía donde extraer el proyecto") is not { } dir) return;
+        await UnpackProjectAsync(files[0], dir);
+    }
+
+    public async Task UnpackProjectAsync(string packagePath, string targetDir)
+    {
+        try
+        {
+            var projectPath = await Task.Run(() => ProjectPackage.Import(packagePath, targetDir));
+            await OpenProjectFileAsync(projectPath);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            Status = $"No se pudo importar el proyecto: {ex.Message}";
+        }
     }
 
     [RelayCommand(CanExecute = nameof(HasProject))]

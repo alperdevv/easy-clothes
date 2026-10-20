@@ -1,12 +1,11 @@
 using EasyClothes.Core.Meshes;
+using EasyClothes.Core.Projects;
 using EasyClothes.Core.Textures;
 
 namespace EasyClothes.Core.Validation;
 
 public static class IssueFixer
 {
-    public const string BackupsFolder = ".backups";
-
     public static string Apply(FixAction fix, string projectDir)
     {
         var relative = fix switch
@@ -31,7 +30,7 @@ public static class IssueFixer
 
     private static string Backup(string projectDir, string relative)
     {
-        var target = Path.Combine(BackupsFolder, DateTime.Now.ToString("yyyyMMdd-HHmmss"), relative);
+        var target = Path.Combine(ProjectFile.BackupsFolder, DateTime.Now.ToString("yyyyMMdd-HHmmss"), relative);
         var full = Path.Combine(projectDir, target);
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         File.Copy(Path.Combine(projectDir, relative), full, overwrite: true);

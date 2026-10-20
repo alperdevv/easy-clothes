@@ -20,6 +20,8 @@
         <Button Content="Nuevo" Command="{Binding NewProjectCommand}" ToolTip.Tip="Nuevo proyecto (Ctrl+N)" />
         <Button Content="Abrir" Command="{Binding OpenProjectCommand}" ToolTip.Tip="Abrir proyecto (Ctrl+O)" />
         <Button Content="Guardar" Command="{Binding SaveCommand}" ToolTip.Tip="Guardar (Ctrl+S)" />
+        <Button Content="Exportar proyecto" Command="{Binding PackProjectCommand}" ToolTip.Tip="Guardar el proyecto con todos sus archivos en un .ecpack" />
+        <Button Content="Importar proyecto" Command="{Binding UnpackProjectCommand}" ToolTip.Tip="Abrir un .ecpack en una carpeta nueva" />
         <Rectangle Classes="separator" />
         <Button Content="Importar prendas" Command="{Binding ImportCommand}" ToolTip.Tip="Importar .ydd con sus texturas (Ctrl+I)" />
         <Button Content="Importar tatuajes" Command="{Binding ImportTattoosCommand}" ToolTip.Tip="Importar imágenes .png o .ytd como tatuajes" />
