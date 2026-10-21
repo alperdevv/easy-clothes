@@ -16,7 +16,7 @@ public static class IssueFixer
             _ => throw new NotSupportedException(fix.GetType().Name),
         };
         var path = Path.Combine(projectDir, relative);
-        var backup = Backup(projectDir, relative);
+        var backup = ProjectBackups.Copy(projectDir, relative);
 
         var summary = fix switch
         {
@@ -26,15 +26,6 @@ public static class IssueFixer
             _ => throw new NotSupportedException(fix.GetType().Name),
         };
         return $"{Path.GetFileName(relative)}: {summary} Copia del original en {backup}.";
-    }
-
-    private static string Backup(string projectDir, string relative)
-    {
-        var target = Path.Combine(ProjectFile.BackupsFolder, DateTime.Now.ToString("yyyyMMdd-HHmmss"), relative);
-        var full = Path.Combine(projectDir, target);
-        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-        File.Copy(Path.Combine(projectDir, relative), full, overwrite: true);
-        return target.Replace('\\', '/');
     }
 
     private static string Describe(MeshReduction result) =>
