@@ -15,15 +15,15 @@ public sealed record TextureSaveResult(string TexturePath, int Index, string? Ba
 public static class TextureEditSaver
 {
     // The edited image replaces the texture inside a copy of the original dictionary, so the
-    // dictionary's own fields and texture name stay as the game expects them.
-    public static TextureSaveResult Save(string projectDir, Drawable drawable, int textureIndex, TextureEdit edit, TextureSaveMode mode)
+    // dictionary's own fields and texture name stay as the game expects them. The layers are kept beside it.
+    public static TextureSaveResult Save(string projectDir, Drawable drawable, int textureIndex, TextureDocument document, TextureSaveMode mode)
     {
         var sourceRelative = drawable.Textures[textureIndex].TexturePath;
         var original = ResourceFile.Read(Path.Combine(projectDir, sourceRelative));
         var info = TextureDictionary.Read(original).FirstOrDefault()
             ?? throw new InvalidDataException($"{Path.GetFileName(sourceRelative)} no contiene texturas.");
 
-        var image = TextureCompositor.Compose(edit);
+        var image = TextureCompositor.Compose(document);
         var (width, height) = TextureOptimizer.TargetSize(image.Width, image.Height, Math.Max(image.Width, image.Height));
         image = TextureCompositor.Resample(image, width, height);
         var format = info.PixelFormat == TextureFormat.Dxt1 && !TextureEncoder.HasTransparency(image)
@@ -34,7 +34,10 @@ public static class TextureEditSaver
         if (mode == TextureSaveMode.Overwrite)
         {
             var backup = ProjectBackups.Copy(projectDir, sourceRelative);
+            var layered = TextureDocumentFile.PathFor(sourceRelative);
+            if (File.Exists(Path.Combine(projectDir, layered))) ProjectBackups.Copy(projectDir, layered);
             rebuilt.Write(Path.Combine(projectDir, sourceRelative));
+            SaveLayers(projectDir, sourceRelative, document);
             return new TextureSaveResult(sourceRelative, textureIndex, backup);
         }
 
@@ -42,8 +45,15 @@ public static class TextureEditSaver
             throw new InvalidOperationException($"{drawable.Name} ya tiene {Drawable.MaxTextures} texturas, el máximo del juego.");
         var relative = UniquePath(projectDir, sourceRelative);
         rebuilt.Write(Path.Combine(projectDir, relative));
+        SaveLayers(projectDir, relative, document);
         drawable.Textures.Add(new TextureVariation { TexturePath = relative });
         return new TextureSaveResult(relative, drawable.Textures.Count - 1, null);
+    }
+
+    private static void SaveLayers(string projectDir, string textureRelative, TextureDocument document)
+    {
+        var texture = Path.Combine(projectDir, textureRelative);
+        TextureDocumentFile.Save(document, TextureDocumentFile.PathFor(texture), TextureDocumentFile.HashOf(texture));
     }
 
     private static string UniquePath(string projectDir, string sourceRelative)

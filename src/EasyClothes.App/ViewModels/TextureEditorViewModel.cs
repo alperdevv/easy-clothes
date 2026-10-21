@@ -18,77 +18,43 @@ public enum EditorTool
     Move,
     Brush,
     Eraser,
-}
-
-public sealed partial class DecalViewModel(Decal model, Action changed) : ObservableObject
-{
-    public Decal Model { get; } = model;
-    public string Name => Model.Name;
-
-    public double Size
-    {
-        get => Model.Scale * 100;
-        set => Set(() => Model.Scale = (float)Math.Clamp(value, 1, 200) / 100);
-    }
-
-    public double Rotation
-    {
-        get => Model.Rotation;
-        set => Set(() => Model.Rotation = (float)value);
-    }
-
-    public double Opacity
-    {
-        get => Model.Opacity * 100;
-        set => Set(() => Model.Opacity = (float)Math.Clamp(value, 0, 100) / 100);
-    }
-
-    public void Move(Vector2 delta)
-    {
-        Model.X = Math.Clamp(Model.X + delta.X, 0, 1);
-        Model.Y = Math.Clamp(Model.Y + delta.Y, 0, 1);
-        changed();
-    }
-
-    public void Resize(float factor) => Size = Size * factor;
-
-    private void Set(Action apply, [System.Runtime.CompilerServices.CallerMemberName] string? property = null)
-    {
-        apply();
-        OnPropertyChanged(property);
-        changed();
-    }
+    Hand,
 }
 
 public sealed partial class TextureEditorViewModel : ObservableObject, IDisposable
 {
-    public const int PreviewSide = 1024;
-    private const int MaxUndo = 20;
-
     private readonly IDialogService _dialogs;
     private readonly string _projectDir;
     private readonly Drawable _drawable;
     private readonly int _textureIndex;
-    private readonly Stack<(byte[] Pixels, bool HasPaint)> _undo = new();
     private bool _composing;
     private bool _composeAgain;
+    private bool _restoring;
     private FileSystemWatcher? _watcher;
     private DispatcherTimer? _externalDebounce;
+    private Guid? _externalLayer;
+    private (PixelLayer Layer, RgbaImage Start)? _pixelMove;
+    private Vector2 _moveTotal;
 
-    public TextureEditorViewModel(IDialogService dialogs, string projectDir, Drawable drawable, int textureIndex, RgbaImage original,
-        IReadOnlyList<MeshData> meshes, IReadOnlyList<RenderItem> body)
+    public TextureEditorViewModel(IDialogService dialogs, string projectDir, Drawable drawable, int textureIndex, TextureDocument document,
+        IReadOnlyList<MeshData> meshes, IReadOnlyList<RenderItem> body, string? note = null)
     {
         _dialogs = dialogs;
         _projectDir = projectDir;
         _drawable = drawable;
         _textureIndex = textureIndex;
-        Edit = new TextureEdit { Original = original };
+        Document = document;
+        History = new EditHistory(document, "Abrir textura");
         Meshes = meshes;
         Body = body;
-        Composed = TextureCompositor.Compose(Edit, PreviewSide);
+        Composed = TextureCompositor.Compose(document);
+        RebuildLayers(document.Layers.OfType<PixelLayer>().LastOrDefault()?.Id);
+        RefreshHistory();
+        if (note is not null) Status = note;
     }
 
-    public TextureEdit Edit { get; }
+    public TextureDocument Document { get; }
+    public EditHistory History { get; }
     public IReadOnlyList<MeshData> Meshes { get; }
     public IReadOnlyList<RenderItem> Body { get; }
     public TextureSaveResult? Saved { get; private set; }
@@ -96,8 +62,9 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
 
     public string Letter => TextureVariation.LetterFor(_textureIndex).ToString();
     public string Title => $"Editor de texturas — {_drawable.Name} · textura {Letter}";
-    public string SizeLabel => $"{Edit.Base.Width}x{Edit.Base.Height}";
-    public bool HasUnsavedChanges => Saved is null && (!Edit.IsEmpty || _undo.Count > 0);
+    public string SizeLabel => $"{Document.Width}x{Document.Height}";
+    public bool HasUnsavedChanges => Saved is null && History.IsModified;
+    public bool HasOriginal => Document.Original is not null;
 
     public event Action? CloseRequested;
 
@@ -105,37 +72,53 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
     public partial RgbaImage Composed { get; private set; }
 
     [ObservableProperty]
-    public partial string Status { get; private set; } = "Arrastra en la textura para mover logos o pintar; la prenda se actualiza al momento.";
+    public partial string Status { get; set; } = "Pinta en una capa o añade imágenes, rellenos y ajustes; la prenda se actualiza al momento.";
 
-    public double Hue { get => Edit.Hue; set => SetAdjustment(() => Edit.Hue = (float)value); }
-    public double Saturation { get => Edit.Saturation * 100; set => SetAdjustment(() => Edit.Saturation = (float)value / 100); }
-    public double Brightness { get => Edit.Brightness * 100; set => SetAdjustment(() => Edit.Brightness = (float)value / 100); }
-    public double Contrast { get => Edit.Contrast * 100; set => SetAdjustment(() => Edit.Contrast = (float)value / 100); }
-    public double TintStrength { get => Edit.TintStrength * 100; set => SetAdjustment(() => Edit.TintStrength = (float)value / 100); }
+    [ObservableProperty]
+    public partial double ZoomPercent { get; set; } = 100;
 
-    public Color TintColor
+    public bool KeepOriginalAlpha
     {
-        get => Color.FromUInt32(0xFF000000 | Edit.TintRgb);
-        set => SetAdjustment(() => Edit.TintRgb = value.ToUInt32() & 0xFFFFFF);
+        get => Document.KeepOriginalAlpha;
+        set
+        {
+            Document.KeepOriginalAlpha = value;
+            OnPropertyChanged();
+            Commit(value ? "Mantener recorte original" : "Usar transparencia de las capas");
+        }
     }
 
-    public ObservableCollection<DecalViewModel> Decals { get; } = [];
+    // Shown top first, like the layers panel of an image editor; the document keeps them bottom first.
+    public ObservableCollection<LayerViewModel> Layers { get; } = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSelectedDecal))]
-    [NotifyCanExecuteChangedFor(nameof(RemoveDecalCommand))]
-    public partial DecalViewModel? SelectedDecal { get; set; }
+    [NotifyPropertyChangedFor(nameof(HasSelectedLayer))]
+    public partial LayerViewModel? SelectedLayer { get; set; }
 
-    public bool HasSelectedDecal => SelectedDecal is not null;
+    public bool HasSelectedLayer => SelectedLayer is not null;
+
+    public ObservableCollection<HistoryItemViewModel> HistoryItems { get; } = [];
+
+    public int HistoryIndex
+    {
+        get => History.Index;
+        set
+        {
+            if (value < 0 || value == History.Index || _restoring) return;
+            Restore(History.JumpTo(value));
+        }
+    }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsMoveTool), nameof(IsBrushTool), nameof(IsEraserTool))]
-    public partial EditorTool Tool { get; set; } = EditorTool.Move;
+    [NotifyPropertyChangedFor(nameof(IsMoveTool), nameof(IsBrushTool), nameof(IsEraserTool), nameof(IsHandTool), nameof(IsPaintTool))]
+    public partial EditorTool Tool { get; set; } = EditorTool.Brush;
 
     // Clicking the active tool again must not leave it looking unselected.
     public bool IsMoveTool { get => Tool == EditorTool.Move; set => SetTool(EditorTool.Move, value); }
     public bool IsBrushTool { get => Tool == EditorTool.Brush; set => SetTool(EditorTool.Brush, value); }
     public bool IsEraserTool { get => Tool == EditorTool.Eraser; set => SetTool(EditorTool.Eraser, value); }
+    public bool IsHandTool { get => Tool == EditorTool.Hand; set => SetTool(EditorTool.Hand, value); }
+    public bool IsPaintTool => Tool is EditorTool.Brush or EditorTool.Eraser;
 
     private void SetTool(EditorTool tool, bool selected, [System.Runtime.CompilerServices.CallerMemberName] string? property = null)
     {
@@ -155,11 +138,57 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
     [ObservableProperty]
     public partial double BrushOpacity { get; set; } = 100;
 
-    private void SetAdjustment(Action apply, [System.Runtime.CompilerServices.CallerMemberName] string? property = null)
+    public void Commit(string label, string? mergeKey = null)
     {
-        apply();
-        OnPropertyChanged(property);
+        if (_restoring) return;
+        History.Commit(Document, label, string.IsNullOrEmpty(mergeKey) ? null : mergeKey);
+        RefreshHistory();
+        RefreshLayerCommands();
         RequestCompose();
+    }
+
+    private void Restore(TextureDocument state)
+    {
+        _restoring = true;
+        try
+        {
+            Document.Restore(state);
+            RebuildLayers(SelectedLayer?.Id);
+            OnPropertyChanged(nameof(KeepOriginalAlpha));
+            OnPropertyChanged(nameof(SizeLabel));
+            RefreshHistory();
+        }
+        finally
+        {
+            _restoring = false;
+        }
+        RequestCompose();
+    }
+
+    private void RefreshHistory()
+    {
+        HistoryItems.Clear();
+        for (var i = 0; i < History.Entries.Count; i++)
+            HistoryItems.Add(new HistoryItemViewModel(History.Entries[i].Label, i > History.Index));
+        OnPropertyChanged(nameof(HistoryIndex));
+        UndoCommand.NotifyCanExecuteChanged();
+        RedoCommand.NotifyCanExecuteChanged();
+    }
+
+    private void RebuildLayers(Guid? select)
+    {
+        Layers.Clear();
+        for (var i = Document.Layers.Count - 1; i >= 0; i--)
+            Layers.Add(new LayerViewModel(Document.Layers[i], (label, key) => Commit(label, key)));
+        SelectedLayer = Layers.FirstOrDefault(l => l.Id == select) ?? Layers.FirstOrDefault();
+    }
+
+    partial void OnSelectedLayerChanged(LayerViewModel? value) => RefreshLayerCommands();
+
+    private void RefreshLayerCommands()
+    {
+        foreach (var command in new IRelayCommand[] { DuplicateLayerCommand, DeleteLayerCommand, MoveLayerUpCommand, MoveLayerDownCommand, MergeDownCommand, RasterizeLayerCommand })
+            command.NotifyCanExecuteChanged();
     }
 
     // At most one compose runs at a time; changes made meanwhile are folded into one more pass.
@@ -181,8 +210,8 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
             do
             {
                 _composeAgain = false;
-                var snapshot = Edit.Snapshot();
-                Composed = await Task.Run(() => TextureCompositor.Compose(snapshot, PreviewSide));
+                var snapshot = Document.Snapshot();
+                Composed = await Task.Run(() => TextureCompositor.Compose(snapshot));
             } while (_composeAgain);
         }
         finally
@@ -198,24 +227,44 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
         for (var i = 0; i < 500 && !done(); i++) await Task.Delay(10);
     }
 
-    [RelayCommand]
-    private async Task AddDecalAsync()
+    // New layers go right above the selected one, as in Photoshop.
+    private void Insert(Layer layer, string label)
     {
-        var files = await _dialogs.PickFilesAsync("Añadir logo o parche", "Imágenes", ImageLoader.Extensions.Select(e => "*" + e).ToList(), multiple: true);
-        foreach (var file in files) AddDecal(file);
+        var index = SelectedLayer is { } selected ? Document.Layers.IndexOf(selected.Model) + 1 : Document.Layers.Count;
+        Document.Layers.Insert(index, layer);
+        RebuildLayers(layer.Id);
+        Commit(label);
     }
 
-    public void AddDecal(string path)
+    private string NextName(string prefix)
+    {
+        for (var i = 1; ; i++)
+            if (Document.Layers.All(l => l.Name != $"{prefix} {i}")) return $"{prefix} {i}";
+    }
+
+    [RelayCommand]
+    private void NewLayer() => Insert(Document.NewPixelLayer(NextName("Capa")), "Nueva capa");
+
+    [RelayCommand]
+    private void NewFillLayer() =>
+        Insert(new FillLayer { Name = NextName("Relleno"), Rgb = BrushColor.ToUInt32() & 0xFFFFFF }, "Nueva capa de relleno");
+
+    [RelayCommand]
+    private void NewAdjustmentLayer() => Insert(new AdjustmentLayer { Name = NextName("Ajuste de color") }, "Nueva capa de ajuste");
+
+    [RelayCommand]
+    private async Task AddImageAsync()
+    {
+        var files = await _dialogs.PickFilesAsync("Añadir imagen como capa", "Imágenes", ImageLoader.Extensions.Select(e => "*" + e).ToList(), multiple: true);
+        foreach (var file in files) AddImage(file);
+    }
+
+    public void AddImage(string path)
     {
         try
         {
-            var decal = new Decal { Name = Path.GetFileNameWithoutExtension(path), Image = ImageLoader.Load(path) };
-            Edit.Decals.Add(decal);
-            var item = new DecalViewModel(decal, RequestCompose);
-            Decals.Add(item);
-            SelectedDecal = item;
+            Insert(new ImageLayer { Name = Path.GetFileNameWithoutExtension(path), Image = ImageLoader.Load(path) }, "Añadir imagen");
             Tool = EditorTool.Move;
-            RequestCompose();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
         {
@@ -223,22 +272,175 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
         }
     }
 
-    [RelayCommand(CanExecute = nameof(HasSelectedDecal))]
-    private void RemoveDecal()
+    [RelayCommand(CanExecute = nameof(HasSelectedLayer))]
+    private void DuplicateLayer()
     {
-        Edit.Decals.Remove(SelectedDecal!.Model);
-        Decals.Remove(SelectedDecal);
-        SelectedDecal = Decals.LastOrDefault();
+        var copy = SelectedLayer!.Model.Clone();
+        Layer duplicate = copy switch
+        {
+            PixelLayer p => new PixelLayer { Name = p.Name, Image = p.Image },
+            ImageLayer i => new ImageLayer { Name = i.Name, Image = i.Image, X = i.X, Y = i.Y, Scale = i.Scale, Rotation = i.Rotation },
+            FillLayer f => new FillLayer { Name = f.Name, Rgb = f.Rgb },
+            AdjustmentLayer a => new AdjustmentLayer
+            {
+                Name = a.Name, Hue = a.Hue, Saturation = a.Saturation, Brightness = a.Brightness, Contrast = a.Contrast,
+                TintRgb = a.TintRgb, TintStrength = a.TintStrength,
+            },
+            _ => throw new NotSupportedException(copy.GetType().Name),
+        };
+        (duplicate.Name, duplicate.Visible, duplicate.Opacity, duplicate.Blend) = ($"{copy.Name} copia", copy.Visible, copy.Opacity, copy.Blend);
+        Insert(duplicate, "Duplicar capa");
+    }
+
+    private bool CanDeleteLayer => SelectedLayer is not null && Document.Layers.Count > 1;
+
+    [RelayCommand(CanExecute = nameof(CanDeleteLayer))]
+    private void DeleteLayer()
+    {
+        var index = Document.Layers.IndexOf(SelectedLayer!.Model);
+        Document.Layers.RemoveAt(index);
+        RebuildLayers(Document.Layers[Math.Max(0, index - 1)].Id);
+        Commit("Eliminar capa");
+    }
+
+    private bool CanMoveLayerUp => SelectedLayer is not null && Document.Layers.IndexOf(SelectedLayer.Model) < Document.Layers.Count - 1;
+    private bool CanMoveLayerDown => SelectedLayer is not null && Document.Layers.IndexOf(SelectedLayer.Model) > 0;
+
+    [RelayCommand(CanExecute = nameof(CanMoveLayerUp))]
+    private void MoveLayerUp() => MoveLayer(+1);
+
+    [RelayCommand(CanExecute = nameof(CanMoveLayerDown))]
+    private void MoveLayerDown() => MoveLayer(-1);
+
+    private void MoveLayer(int step)
+    {
+        var layer = SelectedLayer!.Model;
+        var index = Document.Layers.IndexOf(layer);
+        Document.Layers.RemoveAt(index);
+        Document.Layers.Insert(index + step, layer);
+        RebuildLayers(layer.Id);
+        Commit(step > 0 ? "Subir capa" : "Bajar capa");
+    }
+
+    [RelayCommand(CanExecute = nameof(CanMoveLayerDown))]
+    private void MergeDown()
+    {
+        var merged = Document.MergeDown(SelectedLayer!.Model);
+        RebuildLayers(merged.Id);
+        Commit("Combinar hacia abajo");
+    }
+
+    private bool CanRasterize => SelectedLayer?.CanRasterize == true;
+
+    [RelayCommand(CanExecute = nameof(CanRasterize))]
+    private void RasterizeLayer()
+    {
+        var layer = Document.Rasterize(SelectedLayer!.Model);
+        RebuildLayers(layer.Id);
+        Commit("Rasterizar capa");
+    }
+
+    // Painting needs a visible, unlocked pixel layer; anything else explains itself instead.
+    private PixelLayer? PaintTarget()
+    {
+        var reason = SelectedLayer?.Model switch
+        {
+            null => "Selecciona una capa para pintar.",
+            PixelLayer { Locked: true } => "La capa está bloqueada.",
+            PixelLayer { Visible: false } => "La capa está oculta.",
+            PixelLayer => null,
+            _ => "Solo se puede pintar en capas de píxeles. Crea una capa nueva o rasteriza esta.",
+        };
+        if (reason is null) return (PixelLayer)SelectedLayer!.Model;
+        Status = reason;
+        return null;
+    }
+
+    // History states share pixel buffers, so a stroke always works on a fresh copy of the layer.
+    public bool BeginStroke()
+    {
+        if (PaintTarget() is not { } layer) return false;
+        layer.Image = layer.Image with { Pixels = (byte[])layer.Image.Pixels.Clone() };
+        return true;
+    }
+
+    public void StrokeTo(Vector2 fromUv, Vector2 toUv)
+    {
+        if (SelectedLayer?.Model is not PixelLayer layer) return;
+        var size = new Vector2(Document.Width, Document.Height);
+        var brush = new BrushSettings(BrushColor.ToUInt32() & 0xFFFFFF, (float)Math.Max(0.5, BrushSize / 2),
+            (float)BrushHardness / 100, (float)BrushOpacity / 100, Tool == EditorTool.Eraser);
+        Core.Textures.Editing.Brush.Stroke(layer.Image, fromUv * size, toUv * size, brush);
         RequestCompose();
     }
 
-    // The topmost decal under the point wins, matching the drawing order.
-    public bool SelectDecalAt(Vector2 uv)
+    public void EndStroke() => Commit(Tool == EditorTool.Eraser ? "Borrador" : "Pincel");
+
+    // A click on a placed image selects it; otherwise the selected layer is the one that moves.
+    public bool BeginMove(Vector2 uv)
     {
-        var size = new Vector2(Edit.Base.Width, Edit.Base.Height);
-        for (var i = Decals.Count - 1; i >= 0; i--)
+        SelectImageLayerAt(uv);
+        _moveTotal = Vector2.Zero;
+        _pixelMove = null;
+        switch (SelectedLayer?.Model)
         {
-            var d = Decals[i].Model;
+            case { Locked: true }:
+                Status = "La capa está bloqueada.";
+                return false;
+            case ImageLayer:
+                return true;
+            case PixelLayer pixels:
+                _pixelMove = (pixels, pixels.Image);
+                return true;
+            default:
+                Status = "Los rellenos y ajustes ocupan toda la textura; no se pueden mover.";
+                return false;
+        }
+    }
+
+    public void MoveBy(Vector2 deltaUv)
+    {
+        _moveTotal += deltaUv;
+        if (SelectedLayer?.Model is ImageLayer image)
+        {
+            image.X = Math.Clamp(image.X + deltaUv.X, -0.5f, 1.5f);
+            image.Y = Math.Clamp(image.Y + deltaUv.Y, -0.5f, 1.5f);
+        }
+        else if (_pixelMove is { } move)
+        {
+            move.Layer.Image = Shift(move.Start, (int)MathF.Round(_moveTotal.X * Document.Width), (int)MathF.Round(_moveTotal.Y * Document.Height));
+        }
+        RequestCompose();
+    }
+
+    public void EndMove()
+    {
+        _pixelMove = null;
+        if (_moveTotal != Vector2.Zero) Commit("Mover capa");
+    }
+
+    private static RgbaImage Shift(RgbaImage source, int dx, int dy)
+    {
+        var pixels = new byte[source.Pixels.Length];
+        var row = source.Width * 4;
+        var start = Math.Max(0, dx);
+        var end = Math.Min(source.Width, source.Width + dx);
+        for (var y = 0; y < source.Height && end > start; y++)
+        {
+            var from = y - dy;
+            if (from < 0 || from >= source.Height) continue;
+            Array.Copy(source.Pixels, from * row + (start - dx) * 4, pixels, y * row + start * 4, (end - start) * 4);
+        }
+        return source with { Pixels = pixels };
+    }
+
+    // The topmost visible image under the point wins, matching the drawing order.
+    public bool SelectImageLayerAt(Vector2 uv)
+    {
+        var size = new Vector2(Document.Width, Document.Height);
+        foreach (var item in Layers)
+        {
+            if (item.Model is not ImageLayer { Visible: true } d) continue;
             var width = d.Scale * size.X;
             var height = width * d.Image.Height / d.Image.Width;
             var offset = (uv - new Vector2(d.X, d.Y)) * size;
@@ -247,77 +449,51 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
             var local = new Vector2(offset.X * cos + offset.Y * sin, -offset.X * sin + offset.Y * cos);
             if (MathF.Abs(local.X) <= width / 2 && MathF.Abs(local.Y) <= height / 2)
             {
-                SelectedDecal = Decals[i];
+                SelectedLayer = item;
                 return true;
             }
         }
         return false;
     }
 
-    public void BeginStroke()
+    public void SampleColour(Vector2 uv)
     {
-        Edit.EnsurePaintLayer();
-        _undo.Push(Edit.SavePaint());
-        while (_undo.Count > MaxUndo)
-        {
-            var kept = _undo.Reverse().Skip(1).ToList();
-            _undo.Clear();
-            foreach (var entry in kept) _undo.Push(entry);
-        }
-        UndoCommand.NotifyCanExecuteChanged();
+        var x = Math.Clamp((int)(uv.X * Composed.Width), 0, Composed.Width - 1);
+        var y = Math.Clamp((int)(uv.Y * Composed.Height), 0, Composed.Height - 1);
+        var o = (y * Composed.Width + x) * 4;
+        BrushColor = Color.FromRgb(Composed.Pixels[o], Composed.Pixels[o + 1], Composed.Pixels[o + 2]);
     }
 
-    public void StrokeTo(Vector2 fromUv, Vector2 toUv)
-    {
-        var size = new Vector2(Edit.Base.Width, Edit.Base.Height);
-        var colour = BrushColor.ToUInt32() & 0xFFFFFF;
-        var brush = new BrushSettings(colour, (float)Math.Max(1, BrushSize / 2), (float)BrushHardness / 100, (float)BrushOpacity / 100, Tool == EditorTool.Eraser);
-        Core.Textures.Editing.Brush.Stroke(Edit, fromUv * size, toUv * size, brush);
-        RequestCompose();
-    }
-
-    private bool CanUndo => _undo.Count > 0;
+    private bool CanUndo => History.CanUndo;
+    private bool CanRedo => History.CanRedo;
 
     [RelayCommand(CanExecute = nameof(CanUndo))]
-    private void Undo()
-    {
-        Edit.RestorePaint(_undo.Pop());
-        UndoCommand.NotifyCanExecuteChanged();
-        RequestCompose();
-    }
+    private void Undo() => Restore(History.Undo());
 
+    [RelayCommand(CanExecute = nameof(CanRedo))]
+    private void Redo() => Restore(History.Redo());
+
+    // Goes back to how the texture was opened, as one more step that can itself be undone.
     [RelayCommand]
     private void ResetAll()
     {
-        Edit.ResetAdjustments();
-        Edit.Decals.Clear();
-        Decals.Clear();
-        SelectedDecal = null;
-        Edit.External = null;
-        Edit.EnsurePaintLayer();
-        Edit.ClearPaint();
-        _undo.Clear();
-        UndoCommand.NotifyCanExecuteChanged();
-        NotifyAdjustments();
+        Document.Restore(History.Entries[0].State);
+        RebuildLayers(SelectedLayer?.Id);
+        OnPropertyChanged(nameof(KeepOriginalAlpha));
         OnPropertyChanged(nameof(SizeLabel));
-        Status = "Textura restablecida al original.";
-        RequestCompose();
+        Commit("Restablecer");
+        Status = "Textura restablecida a como se abrió. Ctrl+Z lo deshace.";
     }
 
-    private void NotifyAdjustments()
-    {
-        foreach (var name in new[] { nameof(Hue), nameof(Saturation), nameof(Brightness), nameof(Contrast), nameof(TintStrength), nameof(TintColor) })
-            OnPropertyChanged(name);
-    }
-
-    // Exports what is on screen at full size; when the file comes back, it becomes the new base
-    // and the layers already baked into it are cleared.
+    // Exports what is on screen at full size; when the file comes back it lands as a layer on top
+    // and the layers already baked into it are hidden, so nothing is lost.
     [RelayCommand]
     private async Task OpenExternalAsync()
     {
         Directory.CreateDirectory(ExternalPath);
         var path = Path.Combine(ExternalPath, $"{Sanitize(_drawable.Name)}_{Letter}.png");
-        var image = await Task.Run(() => TextureCompositor.Compose(Edit.Snapshot()));
+        var snapshot = Document.Snapshot();
+        var image = await Task.Run(() => TextureCompositor.Compose(snapshot));
         await using (var file = File.Create(path)) PngWriter.Write(image, file);
         Watch(path);
         try
@@ -364,19 +540,23 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
         try
         {
             var image = await Task.Run(() => PngReader.Read(path));
-            Edit.External = image;
-            Edit.ResetAdjustments();
-            Edit.Decals.Clear();
-            Decals.Clear();
-            SelectedDecal = null;
-            Edit.EnsurePaintLayer();
-            Edit.ClearPaint();
-            _undo.Clear();
-            UndoCommand.NotifyCanExecuteChanged();
-            NotifyAdjustments();
+            Document.Resize(image.Width, image.Height);
+            if (_externalLayer is { } id && Document.Find(id) is PixelLayer existing)
+            {
+                existing.Image = image;
+                existing.Visible = true;
+            }
+            else
+            {
+                foreach (var layer in Document.Layers) layer.Visible = false;
+                var external = new PixelLayer { Name = "Editado fuera", Image = image };
+                Document.Layers.Add(external);
+                _externalLayer = external.Id;
+            }
+            RebuildLayers(_externalLayer);
             OnPropertyChanged(nameof(SizeLabel));
-            Status = $"Cambios recargados desde {Path.GetFileName(path)} ({image.Width}x{image.Height}).";
-            RequestCompose();
+            Commit("Cambios del editor externo");
+            Status = $"Cambios recargados desde {Path.GetFileName(path)} ({image.Width}x{image.Height}). Las capas anteriores quedan ocultas debajo.";
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException)
         {
@@ -393,7 +573,7 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
             ? new[] { $"Crear variante {next}", $"Sobrescribir textura {Letter}" }
             : [$"Sobrescribir textura {Letter}"];
         var message = canAdd
-            ? $"Puedes guardar el resultado como una textura nueva ({next}) dejando la original intacta, o reemplazar la textura {Letter} (se guarda una copia en .backups)."
+            ? $"Puedes guardar el resultado como una textura nueva ({next}) dejando la original intacta, o reemplazar la textura {Letter} (se guarda una copia en .backups). Las capas se guardan junto a la textura para seguir editando otro día."
             : $"La prenda ya tiene {Drawable.MaxTextures} texturas. Se reemplazará la textura {Letter} y se guardará una copia en .backups.";
         if (await _dialogs.ChooseAsync("Aplicar cambios", message, options) is not { } choice) return;
         var mode = canAdd && choice == 0 ? TextureSaveMode.NewVariation : TextureSaveMode.Overwrite;
@@ -405,8 +585,9 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
         Status = "Guardando y comprimiendo la textura…";
         try
         {
-            var snapshot = Edit.Snapshot();
+            var snapshot = Document.Snapshot();
             Saved = await Task.Run(() => TextureEditSaver.Save(_projectDir, _drawable, _textureIndex, snapshot, mode));
+            History.MarkSaved();
             CloseRequested?.Invoke();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or ArgumentException or UnauthorizedAccessException)

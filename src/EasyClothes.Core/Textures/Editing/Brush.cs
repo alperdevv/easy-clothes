@@ -7,15 +7,12 @@ public sealed record BrushSettings(uint Rgb, float Radius, float Hardness, float
 public static class Brush
 {
     // Stamps dabs every quarter radius along the segment so fast strokes stay continuous.
-    public static void Stroke(TextureEdit edit, Vector2 from, Vector2 to, BrushSettings brush)
+    public static void Stroke(RgbaImage layer, Vector2 from, Vector2 to, BrushSettings brush)
     {
-        edit.EnsurePaintLayer();
-        var layer = edit.Paint;
         var spacing = Math.Max(0.5f, brush.Radius / 4);
         var steps = Math.Max(1, (int)(Vector2.Distance(from, to) / spacing));
         for (var i = 0; i <= steps; i++)
             Dab(layer, Vector2.Lerp(from, to, (float)i / steps), brush);
-        edit.MarkPainted();
     }
 
     private static void Dab(RgbaImage layer, Vector2 centre, BrushSettings brush)
