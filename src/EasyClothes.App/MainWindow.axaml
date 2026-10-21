@@ -83,6 +83,8 @@
               <ComboBoxItem Content="Sólido + alámbrico" />
             </ComboBox>
             <Button Content="Centrar" Click="OnResetCamera" />
+            <ToggleButton Content="Personaje" IsChecked="{Binding ShowBody}" ToolTip.Tip="{Binding BodyTip}" />
+            <Button Content="…" Command="{Binding ChooseBodyFolderCommand}" ToolTip.Tip="Elegir la carpeta del personaje" />
           </StackPanel>
         </Border>
         <Border DockPanel.Dock="Bottom" Padding="10,4">

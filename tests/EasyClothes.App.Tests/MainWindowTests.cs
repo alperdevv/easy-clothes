@@ -10,6 +10,7 @@ using EasyClothes.App.Viewer;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Projects;
+using EasyClothes.Core.Settings;
 using EasyClothes.Core.Textures;
 
 namespace EasyClothes.App.Tests;
@@ -171,6 +172,49 @@ public sealed class MainWindowTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_dir, "Mi Ropa", "mi_ropa.ecproj")));
         Assert.Empty(Directory.GetFileSystemEntries(Path.Combine(_dir, "drafts")));
         Assert.DoesNotContain(window.ViewModel.Issues, i => i.Message.Contains("falta"));
+    }
+
+    [AvaloniaFact]
+    public void Choosing_the_body_folder_persists_and_can_be_turned_off()
+    {
+        var window = new MainWindow();
+        window.Show();
+        window.ViewModel.SettingsPath = Path.Combine(_dir, "settings.json");
+        window.ViewModel.Settings = new();
+        Assert.False(window.ViewModel.ShowBody);
+
+        Assert.False(window.ViewModel.SetBodyFolder(_dir));
+        Directory.CreateDirectory(Path.Combine(_dir, "mp_f_freemode_01"));
+        Assert.True(window.ViewModel.SetBodyFolder(Path.Combine(_dir, "mp_f_freemode_01")));
+
+        Assert.True(window.ViewModel.ShowBody);
+        Assert.Equal(_dir, AppSettings.Load(window.ViewModel.SettingsPath).BaseBodyFolder);
+        window.ViewModel.ShowBody = false;
+        Assert.False(AppSettings.Load(window.ViewModel.SettingsPath).ShowBody);
+    }
+
+    // Set EASYCLOTHES_BODY to the folder with the exported freemode peds to check the mannequin loads.
+    [AvaloniaFact]
+    public async Task Selected_garment_is_shown_on_the_exported_body()
+    {
+        if (Environment.GetEnvironmentVariable("EASYCLOTHES_BODY") is not { } body) return;
+        var model = Path.Combine(body, "mp_m_freemode_01", "jbib_000_u.ydd");
+        var window = new MainWindow();
+        window.Show();
+        window.ViewModel.SettingsPath = Path.Combine(_dir, "settings.json");
+        window.ViewModel.Settings = new();
+        window.ViewModel.DraftsRoot = Path.Combine(_dir, "drafts");
+        Assert.True(window.ViewModel.SetBodyFolder(body));
+
+        await window.ViewModel.ImportDrawablesAsync([model]);
+        for (var i = 0; i < 200 && window.ViewModel.Preview?.Body.Count is null or 0; i++)
+        {
+            await Task.Delay(20);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Assert.Equal(5, window.ViewModel.Preview?.Body.Count);
+        Assert.All(window.ViewModel.Preview!.Body, part => Assert.NotNull(part.Texture));
     }
 
     [AvaloniaFact]

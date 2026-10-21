@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -7,14 +8,17 @@ using EasyClothes.Core.Export;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Projects;
+using EasyClothes.Core.Settings;
 using EasyClothes.Core.Textures;
 using EasyClothes.Core.Validation;
+using EasyClothes.Core.Viewing;
 
 namespace EasyClothes.App.ViewModels;
 
 public sealed partial class MainWindowViewModel(IDialogService dialogs) : ObservableObject
 {
     private readonly AnalysisCache _analysisCache = new();
+    private readonly ConcurrentDictionary<(string, string?), RenderItem> _bodyParts = new();
     private int _previewVersion;
     private int _validationVersion;
 
@@ -69,6 +73,39 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     public ObservableCollection<IssueViewModel> Issues { get; } = [];
 
     public string DraftsRoot { get; set; } = ProjectDraft.DefaultRoot;
+    public string SettingsPath { get; set; } = AppSettings.DefaultPath;
+
+    public AppSettings Settings
+    {
+        get;
+        set
+        {
+            field = value;
+            OnPropertyChanged(nameof(ShowBody));
+            OnPropertyChanged(nameof(BodyTip));
+        }
+    } = new();
+
+    public bool ShowBody
+    {
+        get => Settings.ShowBody && Settings.BaseBodyFolder is not null;
+        set
+        {
+            if (value && Settings.BaseBodyFolder is null)
+            {
+                _ = ChooseBodyFolderAsync();
+                return;
+            }
+            Settings.ShowBody = value;
+            SaveSettings();
+            OnPropertyChanged();
+            _ = LoadPreviewAsync();
+        }
+    }
+
+    public string BodyTip => Settings.BaseBodyFolder is { } folder
+        ? $"Mostrar la prenda puesta en el personaje ({folder})"
+        : "Mostrar la prenda puesta en el personaje. Necesita las carpetas mp_m_freemode_01 y mp_f_freemode_01 exportadas del juego con CodeWalker.";
 
     public bool HasProject => Project is not null;
     private bool CanImport => !IsBusy;
@@ -248,6 +285,46 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
         {
             Status = $"No se pudo importar el proyecto: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ChooseBodyFolderAsync()
+    {
+        if (await dialogs.PickFolderAsync("Carpeta con mp_m_freemode_01 y mp_f_freemode_01 exportadas del juego") is { } folder)
+            SetBodyFolder(folder);
+        else
+            OnPropertyChanged(nameof(ShowBody));
+    }
+
+    public bool SetBodyFolder(string folder)
+    {
+        if (BaseBody.ResolveRoot(folder) is not { } root)
+        {
+            Status = "Esa carpeta no contiene mp_m_freemode_01 ni mp_f_freemode_01.";
+            OnPropertyChanged(nameof(ShowBody));
+            return false;
+        }
+        Settings.BaseBodyFolder = root;
+        Settings.ShowBody = true;
+        SaveSettings();
+        _bodyParts.Clear();
+        OnPropertyChanged(nameof(ShowBody));
+        OnPropertyChanged(nameof(BodyTip));
+        Status = $"Personaje cargado desde {root}.";
+        _ = LoadPreviewAsync();
+        return true;
+    }
+
+    private void SaveSettings()
+    {
+        try
+        {
+            Settings.Save(SettingsPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Status = $"No se pudieron guardar los ajustes: {ex.Message}";
         }
     }
 
@@ -482,15 +559,37 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
 
         var modelPath = Path.Combine(ProjectDir, Selected.Model.ModelPath);
         var texturePath = SelectedTexture is null ? null : Path.Combine(ProjectDir, SelectedTexture.RelativePath);
+        var body = BodyFor(Selected.Model);
         try
         {
-            var preview = await Task.Run(() => Preview.Load(modelPath, texturePath));
+            var preview = await Task.Run(() => Preview.Load(modelPath, texturePath) with { Body = LoadBody(body) });
             if (version == _previewVersion) Preview = preview;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
         {
             if (version == _previewVersion) Preview = new Preview([], null, $"No se pudo cargar: {ex.Message}");
         }
+    }
+
+    // Props sit on a bone rather than in body space, so they are shown alone until the skeleton is read.
+    private IReadOnlyList<BodyPart> BodyFor(Drawable drawable) =>
+        ShowBody && drawable.Component is { } slot ? BaseBody.Parts(Settings.BaseBodyFolder!, drawable.Gender, slot) : [];
+
+    private IReadOnlyList<RenderItem> LoadBody(IReadOnlyList<BodyPart> parts)
+    {
+        var items = new List<RenderItem>();
+        foreach (var part in parts)
+        {
+            try
+            {
+                items.Add(_bodyParts.GetOrAdd((part.ModelPath, part.TexturePath), key => Preview.LoadPart(key.Item1, key.Item2)));
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
+            {
+                // A damaged body part only costs that piece of the mannequin, never the garment preview.
+            }
+        }
+        return items;
     }
 
     private void LoadProject(ClothingProject project, string dir, bool draft = false)

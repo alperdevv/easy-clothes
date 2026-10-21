@@ -6,6 +6,8 @@ using Avalonia.Platform.Storage;
 using EasyClothes.App.Services;
 using EasyClothes.App.Viewer;
 using EasyClothes.App.ViewModels;
+using EasyClothes.Core.Settings;
+using EasyClothes.Core.Viewing;
 
 namespace EasyClothes.App;
 
@@ -14,7 +16,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        ViewModel = new MainWindowViewModel(new DialogService(this));
+        ViewModel = new MainWindowViewModel(new DialogService(this)) { Settings = AppSettings.Load(AppSettings.DefaultPath) };
         DataContext = ViewModel;
         ViewModel.PropertyChanged += OnViewModelChanged;
         Viewport.RenderFailed += message => PreviewStatus.Text = message;
@@ -28,8 +30,7 @@ public partial class MainWindow : Window
     {
         if (e.PropertyName != nameof(MainWindowViewModel.Preview)) return;
         var preview = ViewModel.Preview;
-        Viewport.ShowMeshes(preview?.Meshes ?? []);
-        Viewport.ShowTexture(preview?.Texture);
+        Viewport.ShowScene(preview is null ? [] : [new RenderItem(preview.Meshes, preview.Texture)], preview?.Body ?? []);
         PreviewStatus.Text = preview?.Status ?? "";
     }
 

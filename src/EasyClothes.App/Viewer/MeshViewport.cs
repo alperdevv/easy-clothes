@@ -28,12 +28,9 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
     private readonly OrbitCamera _camera = new();
     private GL? _gl;
     private uint _program;
-    private uint _texture;
-    private readonly List<GpuMesh> _gpuMeshes = [];
+    private readonly List<GpuLayer> _layers = [];
 
-    private IReadOnlyList<MeshData>? _pendingMeshes;
-    private RgbaImage? _pendingTexture;
-    private bool _textureDirty;
+    private IReadOnlyList<(RenderItem Item, bool Context)>? _pendingScene;
     private Point? _dragOrigin;
     private bool _panning;
     private (Vector3 Min, Vector3 Max) _bounds;
@@ -48,17 +45,17 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
         set => SetValue(ShadingProperty, value);
     }
 
-    public void ShowMeshes(IReadOnlyList<MeshData> meshes)
+    // Context items (the mannequin) are drawn without the wireframe overlay. The camera is only
+    // reframed when the scene's extent changes, so switching textures keeps the current view.
+    public void ShowScene(IReadOnlyList<RenderItem> items, IReadOnlyList<RenderItem> context)
     {
-        _pendingMeshes = meshes;
-        _bounds = MeshBounds.Of(meshes);
-        ResetCamera();
-    }
-
-    public void ShowTexture(RgbaImage? texture)
-    {
-        _pendingTexture = texture;
-        _textureDirty = true;
+        _pendingScene = [.. items.Select(i => (i, false)), .. context.Select(i => (i, true))];
+        var bounds = MeshBounds.Of(items.Concat(context).SelectMany(i => i.Meshes));
+        if (bounds != _bounds)
+        {
+            _bounds = bounds;
+            ResetCamera();
+        }
         RequestNextFrameRendering();
     }
 
@@ -95,15 +92,12 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
         _gl = GL.GetApi(gl.GetProcAddress);
         var isEs = GlVersion.Type == GlProfileType.OpenGLES;
         _program = CompileProgram(_gl, Shaders.Header(isEs) + Shaders.Vertex, Shaders.Header(isEs) + Shaders.Fragment);
-        _texture = _gl.GenTexture();
     }
 
     protected override void OnOpenGlDeinit(GlInterface gl)
     {
         if (_gl is null) return;
-        foreach (var mesh in _gpuMeshes) mesh.Dispose(_gl);
-        _gpuMeshes.Clear();
-        _gl.DeleteTexture(_texture);
+        ClearLayers(_gl);
         _gl.DeleteProgram(_program);
         _gl = null;
     }
@@ -149,14 +143,15 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
         g.UniformMatrix4(g.GetUniformLocation(_program, "uViewProjection"), 1, false, (float*)&viewProjection);
         var light = Vector3.Normalize(_camera.Position - _camera.Target);
         g.Uniform3(g.GetUniformLocation(_program, "uLightDir"), light.X, light.Y, light.Z);
-        g.Uniform1(g.GetUniformLocation(_program, "uHasTexture"), _pendingTexture is null ? 0 : 1);
+        var hasTexture = g.GetUniformLocation(_program, "uHasTexture");
         g.Uniform1(g.GetUniformLocation(_program, "uTexture"), 0);
         g.ActiveTexture(TextureUnit.Texture0);
-        g.BindTexture(TextureTarget.Texture2D, _texture);
         var flatColour = g.GetUniformLocation(_program, "uFlatColour");
 
-        foreach (var mesh in _gpuMeshes)
+        foreach (var (layer, mesh) in _layers.SelectMany(l => l.Meshes.Select(m => (l, m))))
         {
+            g.Uniform1(hasTexture, layer.Texture == 0 ? 0 : 1);
+            g.BindTexture(TextureTarget.Texture2D, layer.Texture);
             g.BindVertexArray(mesh.Vao);
             if (Shading != ShadingMode.Wireframe)
             {
@@ -168,7 +163,7 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
                 g.DrawElements(PrimitiveType.Triangles, mesh.TriangleCount, DrawElementsType.UnsignedShort, null);
                 g.Disable(EnableCap.PolygonOffsetFill);
             }
-            if (Shading != ShadingMode.Solid)
+            if (Shading != ShadingMode.Solid && !layer.Context)
             {
                 g.Uniform4(flatColour, 0.35f, 0.75f, 1f, 1f);
                 g.BindBuffer(BufferTargetARB.ElementArrayBuffer, mesh.LineIndices);
@@ -250,27 +245,34 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
 
     private unsafe void UploadPending(GL g)
     {
-        if (_pendingMeshes is { } meshes)
+        if (_pendingScene is not { } scene) return;
+        _pendingScene = null;
+        ClearLayers(g);
+        foreach (var (item, context) in scene)
         {
-            _pendingMeshes = null;
-            foreach (var mesh in _gpuMeshes) mesh.Dispose(g);
-            _gpuMeshes.Clear();
-            _gpuMeshes.AddRange(meshes.Select(m => GpuMesh.Upload(g, m)));
-        }
-
-        if (_textureDirty)
-        {
-            _textureDirty = false;
-            if (_pendingTexture is { } image)
+            var texture = 0u;
+            if (item.Texture is { } image)
             {
-                g.BindTexture(TextureTarget.Texture2D, _texture);
+                texture = g.GenTexture();
+                g.BindTexture(TextureTarget.Texture2D, texture);
                 fixed (byte* p = image.Pixels)
                     g.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba, (uint)image.Width, (uint)image.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, p);
                 g.GenerateMipmap(TextureTarget.Texture2D);
                 g.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
                 g.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
             }
+            _layers.Add(new GpuLayer(item.Meshes.Select(m => GpuMesh.Upload(g, m)).ToList(), texture, context));
         }
+    }
+
+    private void ClearLayers(GL g)
+    {
+        foreach (var layer in _layers)
+        {
+            foreach (var mesh in layer.Meshes) mesh.Dispose(g);
+            if (layer.Texture != 0) g.DeleteTexture(layer.Texture);
+        }
+        _layers.Clear();
     }
 
     private static uint CompileProgram(GL g, string vertexSource, string fragmentSource)
@@ -299,6 +301,8 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
             throw new InvalidOperationException($"{type} compile failed: {g.GetShaderInfoLog(shader)}");
         return shader;
     }
+
+    private sealed record GpuLayer(List<GpuMesh> Meshes, uint Texture, bool Context);
 
     private sealed record GpuMesh(uint Vao, uint Vertices, uint TriangleIndices, uint TriangleCount, uint LineIndices, uint LineCount)
     {

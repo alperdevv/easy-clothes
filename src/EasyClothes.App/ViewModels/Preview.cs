@@ -1,10 +1,13 @@
 using EasyClothes.Core.Rage;
 using EasyClothes.Core.Textures;
+using EasyClothes.Core.Viewing;
 
 namespace EasyClothes.App.ViewModels;
 
 public sealed record Preview(IReadOnlyList<MeshData> Meshes, RgbaImage? Texture, string Status)
 {
+    public IReadOnlyList<RenderItem> Body { get; init; } = [];
+
     public static Preview Load(string modelPath, string? texturePath)
     {
         var drawables = DrawableDictionary.Read(ResourceFile.Read(modelPath), includeMeshes: true);
@@ -16,17 +19,29 @@ public sealed record Preview(IReadOnlyList<MeshData> Meshes, RgbaImage? Texture,
         var status = $"{lod.Vertices:N0} vértices · {lod.Triangles:N0} triángulos";
 
         RgbaImage? texture = null;
-        if (texturePath is not null)
+        if (texturePath is not null && LoadTexture(texturePath, out var format) is { } image)
         {
-            var resource = ResourceFile.Read(texturePath);
-            var info = TextureDictionary.Read(resource).FirstOrDefault();
-            if (info is not null)
-            {
-                texture = TextureDictionary.Decode(resource, info);
-                status += $" · {info.Width}x{info.Height} {info.Format}";
-            }
+            texture = image;
+            status += $" · {image.Width}x{image.Height} {format}";
         }
         return new Preview(meshes, texture, status);
+    }
+
+    public static RenderItem LoadPart(string modelPath, string? texturePath)
+    {
+        var drawables = DrawableDictionary.Read(ResourceFile.Read(modelPath), includeMeshes: true);
+        var meshes = drawables.Count == 0 || drawables[0].Lods.Count == 0
+            ? []
+            : drawables[0].Lods[0].Models.SelectMany(m => m).Select(g => g.Mesh!).ToList();
+        return new RenderItem(meshes, texturePath is null ? null : LoadTexture(texturePath, out _));
+    }
+
+    private static RgbaImage? LoadTexture(string path, out string format)
+    {
+        var resource = ResourceFile.Read(path);
+        var info = TextureDictionary.Read(resource).FirstOrDefault();
+        format = info?.Format ?? "";
+        return info is null ? null : TextureDictionary.Decode(resource, info);
     }
 
     // Shows a flat image (a tattoo) on an upright quad facing the default camera.
