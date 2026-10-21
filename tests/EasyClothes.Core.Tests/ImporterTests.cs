@@ -66,6 +66,40 @@ public sealed class ImporterTests : IDisposable
     }
 
     [Fact]
+    public void Imports_whole_folders_taking_the_gender_from_the_folder_name()
+    {
+        var model = Touch("pack_a/stream/mp_f_freemode_01_mp_f_mine/jbib_000_u.ydd");
+        Touch("pack_a/stream/mp_f_freemode_01_mp_f_mine/jbib_diff_000_a_uni.ytd");
+        var other = Touch("pack_b/jbib_000_u.ydd");
+        Touch("pack_b/jbib_diff_000_a_uni.ytd");
+        Touch("pack_b/jbib_diff_000_b_uni.ytd");
+        File.WriteAllText(other, "b");
+        var project = NewProject();
+
+        var result = DrawableImporter.Import(project, ProjectDir, [Path.Combine(Source, "pack_a"), Path.Combine(Source, "pack_b"), model], PedGender.Male);
+
+        Assert.Equal([(PedGender.Male, 2), (PedGender.Female, 1)], result.Added.Select(d => (d.Gender, d.Textures.Count)).Order());
+        Assert.Equal(2, result.Added.Count);
+        Assert.Empty(ProjectValidator.Validate(project, ProjectDir));
+    }
+
+    [Fact]
+    public void Same_named_models_from_different_packs_keep_their_own_files()
+    {
+        var first = Touch("a/lowr_001_u.ydd");
+        var second = Touch("b/lowr_001_u.ydd");
+        File.WriteAllText(second, "b");
+        var project = NewProject();
+
+        DrawableImporter.Import(project, ProjectDir, [first, second], PedGender.Male);
+        DrawableImporter.Import(project, ProjectDir, [ProjectDir], PedGender.Male);
+
+        Assert.Equal(2, project.Drawables.Count);
+        Assert.NotEqual(project.Drawables[0].ModelPath, project.Drawables[1].ModelPath);
+        Assert.Equal("b", File.ReadAllText(Path.Combine(ProjectDir, project.Drawables[1].ModelPath)));
+    }
+
+    [Fact]
     public void Validator_reports_missing_files_and_bad_collection_names()
     {
         var project = new ClothingProject
@@ -86,6 +120,7 @@ public sealed class ImporterTests : IDisposable
     private string Touch(string name)
     {
         var path = Path.Combine(Source, name);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllBytes(path, []);
         return path;
     }

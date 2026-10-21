@@ -10,12 +10,14 @@ public static class DrawableImporter
 
     // Copies each model and the textures found next to it into the project folder,
     // so a project directory is self-contained and can be zipped or moved as is.
-    public static ImportResult<Drawable> Import(ClothingProject project, string projectDir, IEnumerable<string> modelPaths, PedGender fallbackGender)
+    public static ImportResult<Drawable> Import(ClothingProject project, string projectDir, IEnumerable<string> paths, PedGender fallbackGender)
     {
         var added = new List<Drawable>();
         var warnings = new List<string>();
+        var texturesByDir = new Dictionary<string, List<(string Path, TextureName Name)>>();
 
-        foreach (var modelPath in modelPaths)
+        var ownAssets = Path.GetFullPath(projectDir) + Path.DirectorySeparatorChar;
+        foreach (var modelPath in ExpandModels(paths).Where(p => !p.StartsWith(ownAssets, StringComparison.OrdinalIgnoreCase)))
         {
             if (StreamName.ParseModel(modelPath) is not { } model)
             {
@@ -23,13 +25,13 @@ public static class DrawableImporter
                 continue;
             }
 
-            var gender = model.Gender ?? fallbackGender;
-            var textures = FindTextures(modelPath, model, gender);
+            var gender = model.Gender ?? StreamName.GenderFromFolders(modelPath) ?? fallbackGender;
+            var textures = FindTextures(texturesByDir, modelPath, model, gender);
             if (textures.Count == 0)
                 warnings.Add($"{Path.GetFileName(modelPath)}: no se encontraron texturas junto al modelo.");
 
             var name = $"{model.Slot.FileCode}_{model.Index:D3}";
-            var targetDir = Path.Combine(AssetsFolder, gender.ToString().ToLowerInvariant(), name);
+            var targetDir = UniqueDir(projectDir, Path.Combine(AssetsFolder, gender.ToString().ToLowerInvariant(), name));
             var drawable = new Drawable
             {
                 Name = UniqueName(project, gender, name),
@@ -51,15 +53,40 @@ public static class DrawableImporter
         return new ImportResult<Drawable>(added, warnings);
     }
 
-    private static List<string> FindTextures(string modelPath, ModelName model, PedGender gender)
+    // Folders are searched recursively; a file or folder listed twice is imported once.
+    public static IEnumerable<string> ExpandModels(IEnumerable<string> paths) =>
+        paths.SelectMany<string, string>(path => Directory.Exists(path)
+                ? Directory.EnumerateFiles(path, "*.ydd", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase)
+                : [path])
+            .Select(Path.GetFullPath)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+    private static List<string> FindTextures(Dictionary<string, List<(string Path, TextureName Name)>> cache, string modelPath, ModelName model, PedGender gender)
     {
         var dir = Path.GetDirectoryName(Path.GetFullPath(modelPath))!;
-        return Directory.EnumerateFiles(dir, "*.ytd")
-            .Select(path => (Path: path, Name: StreamName.ParseTexture(path)))
-            .Where(t => t.Name is { } n && n.Slot == model.Slot && n.Index == model.Index && (n.Gender ?? gender) == gender)
-            .OrderBy(t => t.Name!.Variation)
+        if (!cache.TryGetValue(dir, out var textures))
+        {
+            textures = Directory.EnumerateFiles(dir, "*.ytd")
+                .Select(path => (Path: path, Name: StreamName.ParseTexture(path)))
+                .Where(t => t.Name is not null)
+                .Select(t => (t.Path, t.Name!))
+                .ToList();
+            cache[dir] = textures;
+        }
+        var folderGender = StreamName.GenderFromFolders(modelPath);
+        return textures
+            .Where(t => t.Name.Slot == model.Slot && t.Name.Index == model.Index && (t.Name.Gender ?? folderGender ?? gender) == gender)
+            .OrderBy(t => t.Name.Variation)
             .Select(t => t.Path)
             .ToList();
+    }
+
+    private static string UniqueDir(string projectDir, string relativeDir)
+    {
+        var candidate = relativeDir;
+        for (var i = 2; Directory.Exists(Path.Combine(projectDir, candidate)); i++)
+            candidate = $"{relativeDir}_{i}";
+        return candidate;
     }
 
     private static string CopyInto(string projectDir, string relativeDir, string source)

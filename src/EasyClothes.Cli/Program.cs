@@ -31,7 +31,7 @@ static int Usage()
     Console.Error.WriteLine("""
         Usage:
           easyclothes new <dir> <name>                 Create an empty project
-          easyclothes import <project> <file.ydd>...   Import models and the textures next to them
+          easyclothes import <project> <ydd|dir>...    Import models (folders recursively) with their textures
           easyclothes validate <project>               List project problems (exit 1 on errors)
           easyclothes build <project> <out-dir>        Generate the FiveM resource (fxmanifest, stream, .ymt, .meta)
           easyclothes pack <project> <file.ecpack>     Zip the project with its assets

@@ -37,17 +37,28 @@ public static partial class StreamName
         return new TextureName(gender, slot, int.Parse(match.Groups["index"].Value), match.Groups["letter"].Value[0] - 'a');
     }
 
+    // Packs often keep bare file names inside a folder named after the ped, e.g. "stream/mp_f_freemode_01_mp_f_eup/".
+    public static PedGender? GenderFromFolders(string filePath)
+    {
+        for (var dir = Path.GetDirectoryName(Path.GetFullPath(filePath)); dir is not null; dir = Path.GetDirectoryName(dir))
+        {
+            if (GenderOf(Path.GetFileName(dir).ToLowerInvariant()) is { } gender) return gender;
+        }
+        return null;
+    }
+
+    private static PedGender? GenderOf(string prefix) =>
+        prefix.StartsWith(PedSlotNames.PedModel(PedGender.Male)) ? PedGender.Male
+        : prefix.StartsWith(PedSlotNames.PedModel(PedGender.Female)) ? PedGender.Female
+        : null;
+
     private static (PedGender? Gender, string Body) Split(string fileName)
     {
         var name = Path.GetFileName(fileName).ToLowerInvariant();
         var caret = name.IndexOf('^');
         if (caret < 0) return (null, name);
 
-        var prefix = name[..caret];
-        PedGender? gender = prefix.StartsWith(PedSlotNames.PedModel(PedGender.Male)) ? PedGender.Male
-            : prefix.StartsWith(PedSlotNames.PedModel(PedGender.Female)) ? PedGender.Female
-            : null;
-        return (gender, name[(caret + 1)..]);
+        return (GenderOf(name[..caret]), name[(caret + 1)..]);
     }
 
     [GeneratedRegex(@"^(?<code>p_[a-z]+|[a-z]{4})_(?<index>\d{3})(_[a-z])?\.ydd$")]
