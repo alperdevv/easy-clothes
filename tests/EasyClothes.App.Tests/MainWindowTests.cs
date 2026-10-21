@@ -146,6 +146,34 @@ public sealed class MainWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Dropping_a_folder_without_a_project_imports_into_a_draft_that_saves_elsewhere()
+    {
+        var pack = Directory.CreateDirectory(Path.Combine(_dir, "pack", "mp_f_freemode_01_x")).FullName;
+        File.WriteAllText(Path.Combine(pack, "lowr_003_u.ydd"), "");
+        File.WriteAllText(Path.Combine(pack, "lowr_diff_003_a_uni.ytd"), "");
+        File.WriteAllText(Path.Combine(pack, "notas.txt"), "");
+        var window = new MainWindow();
+        window.Show();
+        window.ViewModel.DraftsRoot = Path.Combine(_dir, "drafts");
+
+        await window.ViewModel.DropAsync([Path.Combine(_dir, "pack")]);
+
+        Assert.True(window.ViewModel.IsDraft);
+        Assert.Equal("EasyClothes — Sin guardar *", window.Title);
+        Assert.Equal("lowr_003", window.ViewModel.Selected?.Name);
+        Assert.Equal("Mujer", window.ViewModel.Tree.Single().Title);
+
+        Assert.True(await window.ViewModel.SaveDraftAsAsync(Path.Combine(_dir, "Mi Ropa")));
+        await WaitForAnalysis(window.ViewModel);
+
+        Assert.False(window.ViewModel.IsDraft);
+        Assert.Equal("mi_ropa", window.ViewModel.CollectionName);
+        Assert.True(File.Exists(Path.Combine(_dir, "Mi Ropa", "mi_ropa.ecproj")));
+        Assert.Empty(Directory.GetFileSystemEntries(Path.Combine(_dir, "drafts")));
+        Assert.DoesNotContain(window.ViewModel.Issues, i => i.Message.Contains("falta"));
+    }
+
+    [AvaloniaFact]
     public void Dragging_in_the_viewer_orbits_pans_and_double_click_recentres()
     {
         var window = new MainWindow { Width = 1200, Height = 800 };

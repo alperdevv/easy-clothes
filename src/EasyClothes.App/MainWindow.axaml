@@ -5,12 +5,14 @@
         x:Class="EasyClothes.App.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}" Width="1280" Height="800" WindowState="Maximized"
-        Background="{StaticResource WindowBrush}">
+        Background="{StaticResource WindowBrush}"
+        DragDrop.AllowDrop="True">
   <Window.KeyBindings>
     <KeyBinding Gesture="Ctrl+N" Command="{Binding NewProjectCommand}" />
     <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenProjectCommand}" />
     <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
     <KeyBinding Gesture="Ctrl+I" Command="{Binding ImportCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding ImportFolderCommand}" />
     <KeyBinding Gesture="Ctrl+B" Command="{Binding BuildResourceCommand}" />
   </Window.KeyBindings>
 
@@ -23,7 +25,8 @@
         <Button Content="Exportar proyecto" Command="{Binding PackProjectCommand}" ToolTip.Tip="Guardar el proyecto con todos sus archivos en un .ecpack" />
         <Button Content="Importar proyecto" Command="{Binding UnpackProjectCommand}" ToolTip.Tip="Abrir un .ecpack en una carpeta nueva" />
         <Rectangle Classes="separator" />
-        <Button Content="Importar prendas" Command="{Binding ImportCommand}" ToolTip.Tip="Importar .ydd con sus texturas (Ctrl+I)" />
+        <Button Content="Importar prendas" Command="{Binding ImportCommand}" ToolTip.Tip="Importar .ydd con sus texturas (Ctrl+I). También puedes arrastrarlos a la ventana." />
+        <Button Content="Importar carpeta" Command="{Binding ImportFolderCommand}" ToolTip.Tip="Importar todas las prendas de una carpeta y sus subcarpetas (Ctrl+Mayús+I)" />
         <Button Content="Importar tatuajes" Command="{Binding ImportTattoosCommand}" ToolTip.Tip="Importar imágenes .png o .ytd como tatuajes" />
         <Button Content="Eliminar" Command="{Binding RemoveCommand}" />
         <Rectangle Classes="separator" />

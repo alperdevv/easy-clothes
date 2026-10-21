@@ -19,7 +19,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     private int _validationVersion;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand), nameof(PackProjectCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand), nameof(PackProjectCommand), nameof(ImportCommand), nameof(ImportFolderCommand), nameof(ImportTattoosCommand))]
     public partial bool IsBusy { get; private set; }
 
     [ObservableProperty]
@@ -28,8 +28,12 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasProject), nameof(Title))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand), nameof(ImportCommand), nameof(ImportTattoosCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     public partial ClothingProject? Project { get; private set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Title))]
+    public partial bool IsDraft { get; private set; }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand), nameof(PackProjectCommand))]
@@ -59,18 +63,23 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     public partial Preview? Preview { get; private set; }
 
     [ObservableProperty]
-    public partial string Status { get; private set; } = "Crea o abre un proyecto para empezar.";
+    public partial string Status { get; private set; } = "Crea o abre un proyecto, o importa prendas directamente.";
 
     public ObservableCollection<TreeNode> Tree { get; } = [];
     public ObservableCollection<IssueViewModel> Issues { get; } = [];
 
+    public string DraftsRoot { get; set; } = ProjectDraft.DefaultRoot;
+
     public bool HasProject => Project is not null;
+    private bool CanImport => !IsBusy;
     public bool HasFixes => Issues.Any(i => i.HasFix);
     private bool CanFix => !IsBusy && ProjectDir is not null;
     public bool HasSelection => Selected is not null;
     public bool HasTattooSelection => SelectedTattoo is not null;
     private bool CanRemove => HasSelection || HasTattooSelection;
-    public string Title => Project is null ? "EasyClothes" : $"EasyClothes — {Project.Name}{(IsDirty ? " *" : "")}";
+    public string Title => Project is null ? "EasyClothes" : $"EasyClothes — {(IsDraft ? DraftName : Project.Name)}{(IsDirty ? " *" : "")}";
+
+    private const string DraftName = "Sin guardar";
 
     public string IssueSummary
     {
@@ -135,11 +144,57 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     [RelayCommand(CanExecute = nameof(HasProject))]
     private async Task SaveAsync()
     {
+        if (!IsDraft)
+        {
+            await SaveProjectFileAsync();
+            return;
+        }
+        if (await dialogs.PickFolderAsync("Carpeta donde guardar el proyecto") is { } dir) await SaveDraftAsAsync(dir);
+    }
+
+    public async Task<bool> SaveDraftAsAsync(string targetDir)
+    {
+        var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(targetDir));
+        IsBusy = true;
+        try
+        {
+            await Task.Run(() => ProjectDraft.MoveTo(ProjectDir!, targetDir));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Status = $"No se pudo guardar el proyecto: {ex.Message}";
+            return false;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        Project!.Name = name;
+        if (Project.CollectionName == DraftCollection) CollectionName = ToCollectionName(name);
+        ProjectDir = targetDir;
+        IsDraft = false;
+        await SaveProjectFileAsync();
+        _ = LoadPreviewAsync();
+        _ = ValidateAsync();
+        return true;
+    }
+
+    private async Task SaveProjectFileAsync()
+    {
         var path = ProjectPathFor(ProjectDir!, Project!);
         ProjectPackage.BackupProjectFile(path);
         await ProjectFile.SaveAsync(Project!, path);
         IsDirty = false;
-        Status = "Proyecto guardado.";
+        Status = $"Proyecto guardado en {ProjectDir}.";
+    }
+
+    private const string DraftCollection = "pack";
+
+    private void EnsureProject()
+    {
+        if (Project is not null) return;
+        LoadProject(new ClothingProject { Name = DraftName, CollectionName = DraftCollection }, ProjectDraft.Create(DraftsRoot), draft: true);
     }
 
     [RelayCommand(CanExecute = nameof(CanFix))]
@@ -151,7 +206,12 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
 
     public async Task PackProjectAsync(string packagePath)
     {
-        await SaveAsync();
+        if (IsDraft)
+        {
+            Status = "Guarda el proyecto antes de exportarlo.";
+            return;
+        }
+        await SaveProjectFileAsync();
         var projectPath = ProjectPathFor(ProjectDir!, Project!);
         IsBusy = true;
         try
@@ -191,18 +251,77 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
     }
 
-    [RelayCommand(CanExecute = nameof(HasProject))]
+    [RelayCommand(CanExecute = nameof(CanImport))]
     private async Task ImportAsync()
     {
         var files = await dialogs.PickFilesAsync("Importar prendas", "Modelos de ropa", ["*.ydd"], multiple: true);
-        if (files.Count == 0) return;
+        if (files.Count > 0) await ImportDrawablesAsync(files);
+    }
 
+    [RelayCommand(CanExecute = nameof(CanImport))]
+    private async Task ImportFolderAsync()
+    {
+        if (await dialogs.PickFolderAsync("Carpeta con prendas (se busca también en subcarpetas)") is { } dir)
+            await ImportDrawablesAsync([dir]);
+    }
+
+    public async Task ImportDrawablesAsync(IReadOnlyList<string> paths)
+    {
+        EnsureProject();
         var fallback = Selected?.Model.Gender ?? PedGender.Male;
-        var result = await Task.Run(() => DrawableImporter.Import(Project!, ProjectDir!, files, fallback));
+        // The import runs on a copy so validation and the tree never see the list change under them.
+        var staging = new ClothingProject { Name = Project!.Name, CollectionName = Project.CollectionName, Drawables = [.. Project.Drawables] };
+        var dir = ProjectDir!;
+        IsBusy = true;
+        Status = "Importando prendas…";
+        ImportResult<Drawable> result;
+        try
+        {
+            result = await Task.Run(() => DrawableImporter.Import(staging, dir, paths, fallback));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Status = $"No se pudo importar: {ex.Message}";
+            return;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+
+        Project.Drawables.AddRange(result.Added);
         MarkChanged(rebuildTree: true);
-        Status = $"{result.Added.Count} prenda(s) importada(s)." + (result.Warnings.Count > 0 ? " " + string.Join(" ", result.Warnings) : "");
+        Status = $"{result.Added.Count} prenda(s) importada(s)." + WarningsSummary(result.Warnings);
         if (result.Added.LastOrDefault() is { } last) Select(last.Id);
     }
+
+    // Models and folders win over images, so dropping a whole stream folder's files imports clothes, not tattoos.
+    public async Task DropAsync(IReadOnlyList<string> paths)
+    {
+        if (IsBusy) return;
+        if (paths is [var single] && single.EndsWith(ProjectFile.Extension, StringComparison.OrdinalIgnoreCase))
+        {
+            await OpenProjectFileAsync(single);
+            return;
+        }
+        var clothes = paths.Where(p => Directory.Exists(p) || p.EndsWith(".ydd", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (clothes.Count > 0)
+        {
+            await ImportDrawablesAsync(clothes);
+            return;
+        }
+        var images = paths.Where(p => ImageLoader.Extensions.Contains(Path.GetExtension(p).ToLowerInvariant())).ToList();
+        if (images.Count > 0) ImportTattoos(images);
+        else Status = "Arrastra modelos .ydd, carpetas con prendas, imágenes de tatuajes o un proyecto .ecproj.";
+    }
+
+    // Big packs can produce hundreds of warnings; the status bar only has room for a few.
+    private static string WarningsSummary(IReadOnlyList<string> warnings) => warnings.Count switch
+    {
+        0 => "",
+        <= 3 => " " + string.Join(" ", warnings),
+        _ => $" {warnings.Count} avisos, p. ej.: {warnings[0]}",
+    };
 
     [RelayCommand(CanExecute = nameof(CanFix))]
     private async Task BuildResourceAsync()
@@ -238,7 +357,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
     }
 
-    [RelayCommand(CanExecute = nameof(HasProject))]
+    [RelayCommand(CanExecute = nameof(CanImport))]
     private async Task ImportTattoosAsync()
     {
         var files = await dialogs.PickFilesAsync("Importar tatuajes", "Imágenes", ImageLoader.Extensions.Select(e => "*" + e).ToList(), multiple: true);
@@ -247,9 +366,10 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
 
     public void ImportTattoos(IReadOnlyList<string> files)
     {
+        EnsureProject();
         var result = TattooImporter.Import(Project!, ProjectDir!, files, TattooZone.Torso);
         MarkChanged(rebuildTree: true);
-        Status = $"{result.Added.Count} tatuaje(s) importado(s)." + (result.Warnings.Count > 0 ? " " + string.Join(" ", result.Warnings) : "");
+        Status = $"{result.Added.Count} tatuaje(s) importado(s)." + WarningsSummary(result.Warnings);
         if (result.Added.LastOrDefault() is { } last) Select(last.Id);
     }
 
@@ -373,10 +493,11 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
     }
 
-    private void LoadProject(ClothingProject project, string dir)
+    private void LoadProject(ClothingProject project, string dir, bool draft = false)
     {
         Project = project;
         ProjectDir = dir;
+        IsDraft = draft;
         IsDirty = false;
         OnPropertyChanged(nameof(CollectionName));
         RebuildTree();

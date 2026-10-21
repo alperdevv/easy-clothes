@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using EasyClothes.App.Services;
 using EasyClothes.App.Viewer;
 using EasyClothes.App.ViewModels;
@@ -17,6 +18,8 @@ public partial class MainWindow : Window
         DataContext = ViewModel;
         ViewModel.PropertyChanged += OnViewModelChanged;
         Viewport.RenderFailed += message => PreviewStatus.Text = message;
+        AddHandler(DragDrop.DragOverEvent, OnDragOver);
+        AddHandler(DragDrop.DropEvent, OnDrop);
     }
 
     public MainWindowViewModel ViewModel { get; }
@@ -35,6 +38,15 @@ public partial class MainWindow : Window
         // Fires once while the XAML loads, before Viewport is assigned.
         if (Viewport is null) return;
         Viewport.Shading = (ShadingMode)Math.Max(0, ShadingBox.SelectedIndex);
+    }
+
+    private static void OnDragOver(object? sender, DragEventArgs e) =>
+        e.DragEffects = e.DataTransfer.Contains(DataFormat.File) ? DragDropEffects.Copy : DragDropEffects.None;
+
+    private async void OnDrop(object? sender, DragEventArgs e)
+    {
+        var paths = e.DataTransfer.TryGetFiles()?.Select(f => f.TryGetLocalPath()).OfType<string>().ToList();
+        if (paths is { Count: > 0 }) await ViewModel.DropAsync(paths);
     }
 
     private void OnResetCamera(object? sender, RoutedEventArgs e) => Viewport.ResetCamera();

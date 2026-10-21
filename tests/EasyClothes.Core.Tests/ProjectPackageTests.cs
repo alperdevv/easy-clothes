@@ -31,6 +31,23 @@ public sealed class ProjectPackageTests : IDisposable
     }
 
     [Fact]
+    public void Draft_moves_to_the_chosen_folder_but_never_over_existing_files()
+    {
+        var draft = ProjectDraft.Create(Path.Combine(_dir, "drafts"));
+        Directory.CreateDirectory(Path.Combine(draft, "assets"));
+        File.WriteAllText(Path.Combine(draft, "assets", "a.ydd"), "modelo");
+        var busy = Directory.CreateDirectory(Path.Combine(_dir, "ocupada", "assets")).FullName;
+        File.WriteAllText(Path.Combine(busy, "a.ydd"), "otro");
+
+        Assert.Throws<IOException>(() => ProjectDraft.MoveTo(draft, Path.Combine(_dir, "ocupada")));
+        Assert.Equal("otro", File.ReadAllText(Path.Combine(busy, "a.ydd")));
+
+        ProjectDraft.MoveTo(draft, Path.Combine(_dir, "nueva"));
+        Assert.Equal("modelo", File.ReadAllText(Path.Combine(_dir, "nueva", "assets", "a.ydd")));
+        Assert.False(Directory.Exists(draft));
+    }
+
+    [Fact]
     public void Import_rejects_entries_that_escape_the_target_folder()
     {
         var package = Path.Combine(_dir, "malo.ecpack");
