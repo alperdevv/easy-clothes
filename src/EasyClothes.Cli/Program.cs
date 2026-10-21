@@ -8,6 +8,7 @@ using EasyClothes.Core.Projects;
 using EasyClothes.Core.Rage;
 using EasyClothes.Core.Textures;
 using EasyClothes.Core.Validation;
+using EasyClothes.Core.Viewing;
 
 return args switch
 {
@@ -23,6 +24,7 @@ return args switch
     ["reduce-mesh", var path, var triangles] => ReduceMesh(path, int.Parse(triangles)),
     ["export-png", var path, var outDir] => ExportPng(path, outDir),
     ["export-obj", var path, var outDir] => ExportObj(path, outDir),
+    ["render", var output, var yaw, .. var parts] when parts.Length > 0 => Render(output, float.Parse(yaw, CultureInfo.InvariantCulture), parts),
     _ => Usage(),
 };
 
@@ -37,6 +39,7 @@ static int Usage()
           easyclothes pack <project> <file.ecpack>     Zip the project with its assets
           easyclothes unpack <file.ecpack> <dir>       Extract a packaged project into an empty folder
           easyclothes inspect <file.ydd|file.ytd>      Show resource header and list textures or drawables
+          easyclothes render <out.png> <yaw-deg> <file.ydd[=file.ytd]>...  Render models together to a PNG
           easyclothes optimize-texture <file.ytd> <max-side>  Resize, regenerate mips and recompress in place
           easyclothes reduce-mesh <file.ydd> <triangles>      Simplify the high LOD in place
           easyclothes export-png <file.ytd> <out-dir>  Decode every texture to PNG
@@ -249,5 +252,31 @@ static int ReduceMesh(string path, int triangles)
 {
     var result = MeshReducer.Reduce(path, triangles);
     Console.WriteLine($"Triangles {result.OldTriangles:N0} -> {result.NewTriangles:N0}, vertices {result.OldVertices:N0} -> {result.NewVertices:N0}");
+    return 0;
+}
+
+static int Render(string output, float yawDegrees, string[] parts)
+{
+    var items = parts.Select(part =>
+    {
+        var paths = part.Split('=', 2);
+        var lod = DrawableDictionary.Read(ResourceFile.Read(paths[0]), includeMeshes: true)[0].Lods[0];
+        RgbaImage? texture = null;
+        if (paths.Length > 1)
+        {
+            var resource = ResourceFile.Read(paths[1]);
+            texture = TextureDictionary.Decode(resource, TextureDictionary.Read(resource)[0]);
+        }
+        return new RenderItem(lod.Models.SelectMany(m => m).Select(g => g.Mesh!).ToList(), texture);
+    }).ToList();
+
+    var camera = new OrbitCamera();
+    var (min, max) = MeshBounds.Of(items.SelectMany(i => i.Meshes));
+    camera.Frame(min, max);
+    camera.Yaw = yawDegrees * MathF.PI / 180;
+    var image = SoftwareRenderer.Render(items, camera, 512, 768, 0x202226FF);
+    using var file = File.Create(output);
+    PngWriter.Write(image, file);
+    Console.WriteLine($"Rendered {items.Count} part(s) to {output}");
     return 0;
 }
