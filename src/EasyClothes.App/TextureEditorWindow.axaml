@@ -1,0 +1,118 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:viewer="using:EasyClothes.App.Viewer"
+        xmlns:vm="using:EasyClothes.App.ViewModels"
+        x:Class="EasyClothes.App.TextureEditorWindow"
+        x:DataType="vm:TextureEditorViewModel"
+        Title="{Binding Title}" Width="1400" Height="860" WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBrush}">
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+Z" Command="{Binding UndoCommand}" />
+  </Window.KeyBindings>
+
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Classes="bar" BorderThickness="0,0,0,1">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+          <Button Content="Cancelar" Click="OnCancel" />
+          <Button Content="Aplicar…" Command="{Binding ApplyCommand}" Classes="accent" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <ToggleButton Content="Mover logo" IsChecked="{Binding IsMoveTool}" />
+          <ToggleButton Content="Pincel" IsChecked="{Binding IsBrushTool}" />
+          <ToggleButton Content="Borrador" IsChecked="{Binding IsEraserTool}" />
+          <Rectangle Classes="separator" />
+          <Button Content="Deshacer" Command="{Binding UndoCommand}" ToolTip.Tip="Deshace el último trazo (Ctrl+Z)" />
+          <Button Content="Restablecer" Command="{Binding ResetAllCommand}" ToolTip.Tip="Vuelve a la textura original" />
+          <Rectangle Classes="separator" />
+          <Button Content="Editar en Photoshop/GIMP" Command="{Binding OpenExternalCommand}"
+                  ToolTip.Tip="Abre la textura como PNG en tu editor de imágenes; al guardar allí se actualiza aquí" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <Border DockPanel.Dock="Bottom" Classes="bar" BorderThickness="0,1,0,0">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Right" Classes="muted" Text="{Binding SizeLabel}" />
+        <TextBlock Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
+      </DockPanel>
+    </Border>
+
+    <Grid ColumnDefinitions="*,4,*,4,300">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Top" Classes="header" Text="TEXTURA" />
+        <viewer:TextureCanvas x:Name="Canvas" Margin="12,0,12,12" />
+      </DockPanel>
+
+      <GridSplitter Grid.Column="1" />
+
+      <DockPanel Grid.Column="2">
+        <TextBlock DockPanel.Dock="Top" Classes="header" Text="VISTA PREVIA" />
+        <viewer:MeshViewport x:Name="Viewport" />
+      </DockPanel>
+
+      <GridSplitter Grid.Column="3" />
+
+      <ScrollViewer Grid.Column="4">
+        <StackPanel Spacing="4">
+          <TextBlock Classes="header" Text="COLOR" />
+          <StackPanel Classes="form">
+            <TextBlock Classes="label" Text="{Binding Hue, StringFormat='Tono: {0:0}°'}" />
+            <Slider Minimum="-180" Maximum="180" Value="{Binding Hue}" />
+            <TextBlock Classes="label" Text="{Binding Saturation, StringFormat='Saturación: {0:0}'}" />
+            <Slider Minimum="-100" Maximum="100" Value="{Binding Saturation}" />
+            <TextBlock Classes="label" Text="{Binding Brightness, StringFormat='Brillo: {0:0}'}" />
+            <Slider Minimum="-100" Maximum="100" Value="{Binding Brightness}" />
+            <TextBlock Classes="label" Text="{Binding Contrast, StringFormat='Contraste: {0:0}'}" />
+            <Slider Minimum="-100" Maximum="100" Value="{Binding Contrast}" />
+            <TextBlock Classes="label" Text="{Binding TintStrength, StringFormat='Tinte: {0:0} %'}" />
+            <DockPanel>
+              <ColorPicker DockPanel.Dock="Right" Color="{Binding TintColor}" Margin="8,0,0,0" IsAlphaVisible="False" />
+              <Slider Minimum="0" Maximum="100" Value="{Binding TintStrength}" />
+            </DockPanel>
+          </StackPanel>
+
+          <TextBlock Classes="header" Text="LOGOS Y PARCHES" />
+          <StackPanel Classes="form">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Button Content="Añadir imagen…" Command="{Binding AddDecalCommand}" />
+              <Button Content="Quitar" Command="{Binding RemoveDecalCommand}" />
+            </StackPanel>
+            <ListBox ItemsSource="{Binding Decals}" SelectedItem="{Binding SelectedDecal}" MaxHeight="140" Margin="0,6,0,0">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:DecalViewModel">
+                  <TextBlock Text="{Binding Name}" />
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <StackPanel DataContext="{Binding SelectedDecal}" x:DataType="vm:DecalViewModel"
+                        IsVisible="{Binding $parent[Window].((vm:TextureEditorViewModel)DataContext).HasSelectedDecal}">
+              <TextBlock Classes="label" Text="{Binding Size, StringFormat='Tamaño: {0:0} %'}" />
+              <Slider Minimum="1" Maximum="200" Value="{Binding Size}" />
+              <TextBlock Classes="label" Text="{Binding Rotation, StringFormat='Rotación: {0:0}°'}" />
+              <Slider Minimum="-180" Maximum="180" Value="{Binding Rotation}" />
+              <TextBlock Classes="label" Text="{Binding Opacity, StringFormat='Opacidad: {0:0} %'}" />
+              <Slider Minimum="0" Maximum="100" Value="{Binding Opacity}" />
+            </StackPanel>
+            <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,6,0,0"
+                       Text="Con «Mover logo», arrastra el logo en la textura y usa la rueda para cambiar su tamaño." />
+          </StackPanel>
+
+          <TextBlock Classes="header" Text="PINCEL" />
+          <StackPanel Classes="form">
+            <DockPanel>
+              <ColorPicker DockPanel.Dock="Right" Color="{Binding BrushColor}" Margin="8,0,0,0" IsAlphaVisible="False" />
+              <TextBlock Classes="label" Text="Color" VerticalAlignment="Center" Margin="0" />
+            </DockPanel>
+            <TextBlock Classes="label" Text="{Binding BrushSize, StringFormat='Tamaño: {0:0} px'}" />
+            <Slider Minimum="1" Maximum="512" Value="{Binding BrushSize}" />
+            <TextBlock Classes="label" Text="{Binding BrushHardness, StringFormat='Dureza: {0:0} %'}" />
+            <Slider Minimum="0" Maximum="100" Value="{Binding BrushHardness}" />
+            <TextBlock Classes="label" Text="{Binding BrushOpacity, StringFormat='Opacidad: {0:0} %'}" />
+            <Slider Minimum="1" Maximum="100" Value="{Binding BrushOpacity}" />
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </DockPanel>
+</Window>

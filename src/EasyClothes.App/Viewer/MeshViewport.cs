@@ -31,6 +31,7 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
     private readonly List<GpuLayer> _layers = [];
 
     private IReadOnlyList<(RenderItem Item, bool Context)>? _pendingScene;
+    private RgbaImage? _pendingItemTexture;
     private Point? _dragOrigin;
     private bool _panning;
     private (Vector3 Min, Vector3 Max) _bounds;
@@ -56,6 +57,13 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
             _bounds = bounds;
             ResetCamera();
         }
+        RequestNextFrameRendering();
+    }
+
+    // Swaps the texture of the first non-context item without re-uploading the rest of the scene.
+    public void ShowItemTexture(RgbaImage texture)
+    {
+        _pendingItemTexture = texture;
         RequestNextFrameRendering();
     }
 
@@ -245,24 +253,40 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
 
     private unsafe void UploadPending(GL g)
     {
-        if (_pendingScene is not { } scene) return;
-        _pendingScene = null;
+        if (_pendingScene is { } scene)
+        {
+            _pendingScene = null;
+            UploadScene(g, scene);
+        }
+        if (_pendingItemTexture is { } itemTexture && _layers.FindIndex(l => !l.Context) is var index and >= 0)
+        {
+            _pendingItemTexture = null;
+            var layer = _layers[index];
+            if (layer.Texture != 0) g.DeleteTexture(layer.Texture);
+            _layers[index] = layer with { Texture = UploadTexture(g, itemTexture) };
+        }
+    }
+
+    private void UploadScene(GL g, IReadOnlyList<(RenderItem Item, bool Context)> scene)
+    {
         ClearLayers(g);
         foreach (var (item, context) in scene)
         {
-            var texture = 0u;
-            if (item.Texture is { } image)
-            {
-                texture = g.GenTexture();
-                g.BindTexture(TextureTarget.Texture2D, texture);
-                fixed (byte* p = image.Pixels)
-                    g.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba, (uint)image.Width, (uint)image.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, p);
-                g.GenerateMipmap(TextureTarget.Texture2D);
-                g.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
-                g.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
-            }
+            var texture = item.Texture is { } image ? UploadTexture(g, image) : 0u;
             _layers.Add(new GpuLayer(item.Meshes.Select(m => GpuMesh.Upload(g, m)).ToList(), texture, context));
         }
+    }
+
+    private static unsafe uint UploadTexture(GL g, RgbaImage image)
+    {
+        var texture = g.GenTexture();
+        g.BindTexture(TextureTarget.Texture2D, texture);
+        fixed (byte* p = image.Pixels)
+            g.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba, (uint)image.Width, (uint)image.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, p);
+        g.GenerateMipmap(TextureTarget.Texture2D);
+        g.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
+        g.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        return texture;
     }
 
     private void ClearLayers(GL g)

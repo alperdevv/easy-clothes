@@ -4,6 +4,9 @@ namespace EasyClothes.Core.Textures.Editing;
 
 public static class TextureCompositor
 {
+    private static readonly Lock CacheLock = new();
+    private static (RgbaImage Source, RgbaImage Scaled)? _scaledBase;
+
     // maxSide limits the output for live previews; the saved texture is composed at full size.
     public static RgbaImage Compose(TextureEdit edit, int maxSide = int.MaxValue)
     {
@@ -11,13 +14,26 @@ public static class TextureCompositor
         var scale = Math.Min(1f, (float)maxSide / Math.Max(source.Width, source.Height));
         var width = Math.Max(1, (int)(source.Width * scale));
         var height = Math.Max(1, (int)(source.Height * scale));
-        var output = Resample(source, width, height);
-        if (ReferenceEquals(output, source)) output = new RgbaImage(width, height, (byte[])source.Pixels.Clone());
+        var output = new RgbaImage(width, height, (byte[])ScaledBase(source, width, height).Pixels.Clone());
 
         if (edit.HasAdjustments) Adjust(output, edit);
         foreach (var decal in edit.Decals) DrawDecal(output, decal);
         if (edit.HasPaint) Overlay(output, edit.Paint);
         return output;
+    }
+
+    // Live previews compose many times per second over the same base; downscaling it once is the expensive part.
+    private static RgbaImage ScaledBase(RgbaImage source, int width, int height)
+    {
+        if (source.Width == width && source.Height == height) return source;
+        lock (CacheLock)
+        {
+            if (_scaledBase is { } cached && ReferenceEquals(cached.Source, source) && cached.Scaled.Width == width && cached.Scaled.Height == height)
+                return cached.Scaled;
+        }
+        var scaled = Resample(source, width, height);
+        lock (CacheLock) _scaledBase = (source, scaled);
+        return scaled;
     }
 
     private static void Adjust(RgbaImage image, TextureEdit edit)
@@ -99,16 +115,21 @@ public static class TextureCompositor
         });
     }
 
+    // Nearest sampling: at full size it is exact, and for previews it avoids resampling the layer per frame.
     private static void Overlay(RgbaImage target, RgbaImage paint)
     {
-        var layer = Resample(paint, target.Width, target.Height);
         var pixels = target.Pixels;
-        for (var o = 0; o < pixels.Length; o += 4)
+        Parallel.For(0, target.Height, y =>
         {
-            var alpha = layer.Pixels[o + 3];
-            if (alpha == 0) continue;
-            Blend(pixels, o, new Vector4(layer.Pixels[o], layer.Pixels[o + 1], layer.Pixels[o + 2], alpha) / 255f, alpha / 255f);
-        }
+            var py = y * paint.Height / target.Height;
+            for (var x = 0; x < target.Width; x++)
+            {
+                var p = (py * paint.Width + x * paint.Width / target.Width) * 4;
+                var alpha = paint.Pixels[p + 3];
+                if (alpha == 0) continue;
+                Blend(pixels, (y * target.Width + x) * 4, new Vector4(paint.Pixels[p], paint.Pixels[p + 1], paint.Pixels[p + 2], alpha) / 255f, alpha / 255f);
+            }
+        });
     }
 
     // The texture's own alpha is kept: it is the garment's cut-out, decals and paint only colour it.

@@ -57,5 +57,11 @@ public sealed partial class DrawableViewModel(Drawable model, Action<DrawableVie
         return name[(name.IndexOf('^') + 1)..];
     }
 
+    public void RefreshTextures()
+    {
+        OnPropertyChanged(nameof(Textures));
+        OnPropertyChanged(nameof(Summary));
+    }
+
     public string Summary => $"{Model.Textures.Count} textura{(Model.Textures.Count == 1 ? "" : "s")}";
 }

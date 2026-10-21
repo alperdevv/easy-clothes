@@ -10,6 +10,7 @@
   </Application.Resources>
   <Application.Styles>
     <FluentTheme />
+    <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
     <Style Selector="Border.bar">
       <Setter Property="Background" Value="{StaticResource BarBrush}" />
       <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />

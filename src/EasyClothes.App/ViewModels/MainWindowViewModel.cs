@@ -23,7 +23,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     private int _validationVersion;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand), nameof(PackProjectCommand), nameof(ImportCommand), nameof(ImportFolderCommand), nameof(ImportTattoosCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand), nameof(PackProjectCommand), nameof(ImportCommand), nameof(ImportFolderCommand), nameof(ImportTattoosCommand), nameof(EditTextureCommand))]
     public partial bool IsBusy { get; private set; }
 
     [ObservableProperty]
@@ -52,7 +52,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection))]
-    [NotifyCanExecuteChangedFor(nameof(RemoveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RemoveCommand), nameof(EditTextureCommand))]
     public partial DrawableViewModel? Selected { get; private set; }
 
     [ObservableProperty]
@@ -61,6 +61,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     public partial TattooViewModel? SelectedTattoo { get; private set; }
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(EditTextureCommand))]
     public partial TextureItem? SelectedTexture { get; set; }
 
     [ObservableProperty]
@@ -286,6 +287,46 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         {
             Status = $"No se pudo importar el proyecto: {ex.Message}";
         }
+    }
+
+    private bool CanEditTexture => !IsBusy && Selected is not null && SelectedTexture is not null && ProjectDir is not null;
+
+    [RelayCommand(CanExecute = nameof(CanEditTexture))]
+    private async Task EditTextureAsync()
+    {
+        if (await CreateTextureEditorAsync() is not { } editor) return;
+        await dialogs.EditTextureAsync(editor);
+        ApplyTextureEdit(editor);
+    }
+
+    public async Task<TextureEditorViewModel?> CreateTextureEditorAsync()
+    {
+        var drawable = Selected!;
+        var texture = SelectedTexture!;
+        try
+        {
+            var path = Path.Combine(ProjectDir!, texture.RelativePath);
+            var original = await Task.Run(() => ImageLoader.Load(path));
+            var preview = Preview;
+            return new TextureEditorViewModel(dialogs, ProjectDir!, drawable.Model, texture.Index, original, preview?.Meshes ?? [], preview?.Body ?? []);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
+        {
+            Status = $"No se pudo abrir la textura: {ex.Message}";
+            return null;
+        }
+    }
+
+    public void ApplyTextureEdit(TextureEditorViewModel editor)
+    {
+        if (editor.Saved is not { } saved || Selected is not { } drawable) return;
+        drawable.RefreshTextures();
+        MarkChanged(rebuildTree: false);
+        SelectedTexture = drawable.Textures[saved.Index];
+        _ = LoadPreviewAsync();
+        Status = saved.BackupPath is { } backup
+            ? $"Textura {TextureVariation.LetterFor(saved.Index)} actualizada. Copia del original en {backup}."
+            : $"Nueva textura {TextureVariation.LetterFor(saved.Index)} creada a partir de la edición.";
     }
 
     [RelayCommand]

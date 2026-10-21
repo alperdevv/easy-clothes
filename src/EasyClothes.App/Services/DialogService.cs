@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Avalonia.Controls;
+using Avalonia.Layout;
 using Avalonia.Platform.Storage;
 
 namespace EasyClothes.App.Services;
@@ -20,6 +22,51 @@ public sealed class DialogService(TopLevel topLevel) : IDialogService
     {
         var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = title });
         return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
+    }
+
+    public async Task<int?> ChooseAsync(string title, string message, IReadOnlyList<string> options)
+    {
+        int? choice = null;
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Right };
+        var dialog = new Window
+        {
+            Title = title,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new StackPanel
+            {
+                Margin = new Avalonia.Thickness(20),
+                Spacing = 16,
+                MaxWidth = 460,
+                Children = { new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap }, buttons },
+            },
+        };
+        for (var i = 0; i < options.Count; i++)
+        {
+            var index = i;
+            var button = new Button { Content = options[i] };
+            button.Click += (_, _) =>
+            {
+                choice = index;
+                dialog.Close();
+            };
+            buttons.Children.Add(button);
+        }
+        var cancel = new Button { Content = "Cancelar" };
+        cancel.Click += (_, _) => dialog.Close();
+        buttons.Children.Add(cancel);
+
+        if (topLevel is Window owner) await dialog.ShowDialog(owner);
+        return choice;
+    }
+
+    public void OpenExternally(string path) => Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+
+    public async Task EditTextureAsync(ViewModels.TextureEditorViewModel editor)
+    {
+        var window = new TextureEditorWindow(editor);
+        if (topLevel is Window owner) await window.ShowDialog(owner);
     }
 
     public async Task<string?> PickSaveFileAsync(string title, string suggestedName, string description, string extension)

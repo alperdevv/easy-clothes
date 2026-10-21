@@ -36,10 +36,40 @@ public sealed class TextureEdit
 
     public void MarkPainted() => HasPaint = true;
 
+    public (byte[] Pixels, bool HasPaint) SavePaint() => ((byte[])Paint.Pixels.Clone(), HasPaint);
+
+    public void RestorePaint((byte[] Pixels, bool HasPaint) saved)
+    {
+        if (saved.Pixels.Length != Paint.Pixels.Length) return;
+        Paint = Paint with { Pixels = saved.Pixels };
+        HasPaint = saved.HasPaint;
+    }
+
     public void ClearPaint()
     {
         Array.Clear(Paint.Pixels);
         HasPaint = false;
+    }
+
+    // A copy safe to compose on another thread while the editor keeps changing this one.
+    // Images are shared: they are replaced, not mutated, except the paint layer, where a torn frame is harmless.
+    public TextureEdit Snapshot()
+    {
+        var copy = new TextureEdit
+        {
+            Original = Original,
+            External = External,
+            Hue = Hue,
+            Saturation = Saturation,
+            Brightness = Brightness,
+            Contrast = Contrast,
+            TintRgb = TintRgb,
+            TintStrength = TintStrength,
+            Paint = Paint,
+            HasPaint = HasPaint,
+        };
+        copy.Decals.AddRange(Decals.Select(d => new Decal { Name = d.Name, Image = d.Image, X = d.X, Y = d.Y, Scale = d.Scale, Rotation = d.Rotation, Opacity = d.Opacity }));
+        return copy;
     }
 
     public void ResetAdjustments()

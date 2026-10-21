@@ -77,6 +77,8 @@
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
+            <Button Content="Editar textura" Command="{Binding EditTextureCommand}"
+                    ToolTip.Tip="Color, logos, pincel o tu editor de imágenes, con vista previa al momento" />
             <ComboBox x:Name="ShadingBox" SelectedIndex="0" Width="170" SelectionChanged="OnShadingChanged">
               <ComboBoxItem Content="Sólido" />
               <ComboBoxItem Content="Alámbrico" />
