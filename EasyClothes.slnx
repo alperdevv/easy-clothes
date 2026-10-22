@@ -3,9 +3,11 @@
     <Project Path="src/EasyClothes.App/EasyClothes.App.csproj" />
     <Project Path="src/EasyClothes.Cli/EasyClothes.Cli.csproj" />
     <Project Path="src/EasyClothes.Core/EasyClothes.Core.csproj" />
+    <Project Path="src/EasyClothes.Mcp/EasyClothes.Mcp.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/EasyClothes.App.Tests/EasyClothes.App.Tests.csproj" />
     <Project Path="tests/EasyClothes.Core.Tests/EasyClothes.Core.Tests.csproj" />
+    <Project Path="tests/EasyClothes.Mcp.Tests/EasyClothes.Mcp.Tests.csproj" />
   </Folder>
 </Solution>
