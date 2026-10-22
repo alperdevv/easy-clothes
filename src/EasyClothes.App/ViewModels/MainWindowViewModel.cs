@@ -386,6 +386,43 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
             : $"Nueva textura {TextureVariation.LetterFor(saved.Index)} creada a partir de la edición.";
     }
 
+    // The MCP server ships next to the app, so Claude can work on projects directly.
+    public string McpServerPath { get; set; } = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "EasyClothes.Mcp.exe" : "EasyClothes.Mcp");
+
+    [RelayCommand]
+    private async Task ConnectClaudeAsync()
+    {
+        if (!File.Exists(McpServerPath))
+        {
+            Status = $"No se encuentra {Path.GetFileName(McpServerPath)} junto a la app; publícalo en la misma carpeta.";
+            return;
+        }
+        var args = ClaudeConnection.ServerArgs(Settings.BaseBodyFolder);
+        var command = ClaudeConnection.ClaudeCodeCommand(McpServerPath, args);
+        var desktop = ClaudeConnection.DesktopConfigPath;
+        string[] options = desktop is null ? ["Copiar comando de Claude Code", "Cancelar"] : ["Añadir a Claude Desktop", "Copiar comando de Claude Code", "Cancelar"];
+        var choice = await dialogs.ChooseAsync("Conectar con Claude",
+            "Claude podrá abrir tus proyectos, importar y ordenar prendas, revisar problemas, ver las prendas renderizadas, editar texturas y generar el recurso. " +
+            "Cada cambio guarda una copia en .backups y esta ventana se recarga sola.", options);
+        if (choice is null || options[choice.Value] == "Cancelar") return;
+
+        if (options[choice.Value] == "Copiar comando de Claude Code")
+        {
+            await dialogs.CopyToClipboardAsync(command);
+            Status = $"Comando copiado; pégalo en una terminal: {command}";
+            return;
+        }
+        try
+        {
+            ClaudeConnection.AddToDesktop(desktop!, McpServerPath, args);
+            Status = "EasyClothes añadido a Claude Desktop. Ciérralo del todo (también desde la bandeja) y vuelve a abrirlo.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
+        {
+            Status = $"No se pudo modificar la configuración de Claude Desktop ({desktop}): {ex.Message}";
+        }
+    }
+
     [RelayCommand]
     private async Task ChooseBodyFolderAsync()
     {

@@ -76,6 +76,11 @@ public sealed class McpServerTests : IDisposable
         Assert.True(tools.Single(t => t.Name == "remove_garment").ProtocolTool.Annotations?.DestructiveHint);
         Assert.All(tools, t => Assert.False(string.IsNullOrWhiteSpace(t.Description)));
 
+        Assert.Contains("reserve_numbers", client.ServerInstructions);
+        Assert.Equal(["importar_pack", "revisar_pack"], (await client.ListPromptsAsync()).Select(p => p.Name).Order());
+        var review = await client.GetPromptAsync("revisar_pack", new Dictionary<string, object?> { ["project"] = _dir });
+        Assert.Contains(_dir, ((TextContentBlock)review.Messages[0].Content).Text);
+
         var found = await client.CallToolAsync("find_projects", new Dictionary<string, object?> { ["folder"] = _dir });
         Assert.Contains("\"name\":\"Ropa\"", Text(found));
 

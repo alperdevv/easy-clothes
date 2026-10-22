@@ -307,6 +307,18 @@ public sealed class MainWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Connecting_claude_explains_when_the_server_is_missing()
+    {
+        var window = new MainWindow();
+        window.Show();
+        window.ViewModel.McpServerPath = Path.Combine(_dir, "EasyClothes.Mcp.exe");
+
+        await window.ViewModel.ConnectClaudeCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("No se encuentra EasyClothes.Mcp.exe", window.ViewModel.Status);
+    }
+
+    [AvaloniaFact]
     public void Choosing_the_body_folder_persists_and_can_be_turned_off()
     {
         var window = new MainWindow();

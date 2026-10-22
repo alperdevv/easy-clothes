@@ -7,5 +7,6 @@ public interface IDialogService
     Task<string?> PickSaveFileAsync(string title, string suggestedName, string description, string extension);
     Task<int?> ChooseAsync(string title, string message, IReadOnlyList<string> options);
     void OpenExternally(string path);
+    Task CopyToClipboardAsync(string text);
     Task EditTextureAsync(ViewModels.TextureEditorViewModel editor);
 }

@@ -33,6 +33,8 @@
         <Button Content="Eliminar" Command="{Binding RemoveCommand}" />
         <Rectangle Classes="separator" />
         <Button Content="Generar recurso" Command="{Binding BuildResourceCommand}" ToolTip.Tip="Crear la carpeta del recurso de FiveM (Ctrl+B)" />
+        <Rectangle Classes="separator" />
+        <Button Content="Conectar con Claude" Command="{Binding ConnectClaudeCommand}" ToolTip.Tip="Deja que Claude (Desktop o Code) trabaje en tus proyectos con EasyClothes" />
       </StackPanel>
     </Border>
 

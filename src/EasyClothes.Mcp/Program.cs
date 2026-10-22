@@ -12,8 +12,13 @@ builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
 builder.Services.AddSingleton(ServerOptions.Parse(args));
 builder.Services.AddSingleton<Workspace>();
 builder.Services
-    .AddMcpServer(o => o.ServerInfo = new() { Name = "easyclothes", Version = "0.1.0" })
+    .AddMcpServer(o =>
+    {
+        o.ServerInfo = new() { Name = "easyclothes", Version = "0.1.0" };
+        o.ServerInstructions = Prompts.Instructions;
+    })
     .WithStdioServerTransport()
     // Unescaped accents keep the Spanish messages readable and shorter.
-    .WithToolsFromAssembly(serializerOptions: new JsonSerializerOptions(McpJsonUtilities.DefaultOptions) { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+    .WithToolsFromAssembly(serializerOptions: new JsonSerializerOptions(McpJsonUtilities.DefaultOptions) { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping })
+    .WithPromptsFromAssembly();
 await builder.Build().RunAsync();

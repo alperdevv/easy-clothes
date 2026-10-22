@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Platform.Storage;
 
@@ -22,6 +23,11 @@ public sealed class DialogService(TopLevel topLevel) : IDialogService
     {
         var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = title });
         return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
+    }
+
+    public async Task CopyToClipboardAsync(string text)
+    {
+        if (topLevel.Clipboard is { } clipboard) await clipboard.SetTextAsync(text);
     }
 
     public async Task<int?> ChooseAsync(string title, string message, IReadOnlyList<string> options)
