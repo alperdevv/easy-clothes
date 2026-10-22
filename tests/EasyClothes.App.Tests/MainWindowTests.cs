@@ -224,6 +224,39 @@ public sealed class MainWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Garments_can_be_reordered_and_numbers_reserved_from_the_panel()
+    {
+        var path = await SaveProject(new ClothingProject
+        {
+            Name = "UI",
+            CollectionName = "ui",
+            Drawables =
+            [
+                new Drawable { Name = "a", Component = ComponentSlot.Top, ModelPath = "a.ydd" },
+                new Drawable { Name = "b", Component = ComponentSlot.Top, ModelPath = "b.ydd" },
+                new Drawable { Name = "c", Component = ComponentSlot.Top, ModelPath = "c.ydd" },
+            ],
+        });
+        var window = new MainWindow();
+        window.Show();
+        var vm = window.ViewModel;
+        await vm.OpenProjectFileAsync(path);
+        SelectByName(vm, "c");
+
+        window.KeyPress(Key.Up, RawInputModifiers.Alt, PhysicalKey.ArrowUp, null);
+        Assert.Equal(["000 a", "001 c", "002 b"], TopNodes(vm));
+        Assert.Equal("Número en el juego: 001", vm.Selected?.NumberLabel);
+        Assert.True(vm.IsDirty);
+
+        vm.ReserveSlotCommand.Execute(null);
+        Assert.Equal(["000 a", "001 c", "002 b", "003 reservado 1"], TopNodes(vm));
+        Assert.True(vm.Selected?.IsReserved);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, "Asignar prenda…") && b.IsEffectivelyVisible);
+        Assert.DoesNotContain(vm.Issues, i => i.Message.Contains("reservado"));
+    }
+
+    [AvaloniaFact]
     public void Choosing_the_body_folder_persists_and_can_be_turned_off()
     {
         var window = new MainWindow();
@@ -327,6 +360,9 @@ public sealed class MainWindowTests : IDisposable
         Directory.CreateDirectory(dir);
         window.CaptureRenderedFrame()?.Save(Path.Combine(dir, name), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
+
+    private static List<string> TopNodes(MainWindowViewModel vm) =>
+        vm.Tree.SelectMany(g => g.Children).SelectMany(s => s.Children).Select(n => $"{n.Number} {n.Title}").ToList();
 
     private static void SelectByName(MainWindowViewModel vm, string name) =>
         vm.SelectedNode = vm.Tree.SelectMany(g => g.Children).SelectMany(s => s.Children).Single(n => n.Title == name);

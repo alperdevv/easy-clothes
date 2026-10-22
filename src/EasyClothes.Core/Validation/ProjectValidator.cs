@@ -15,7 +15,7 @@ public static class ProjectValidator
         if (string.IsNullOrWhiteSpace(project.CollectionName) || project.CollectionName.Any(c => !char.IsAsciiLetterLower(c) && !char.IsAsciiDigit(c) && c != '_'))
             issues.Add(new(IssueSeverity.Error, "El nombre de colección solo puede tener minúsculas, números y guiones bajos."));
 
-        foreach (var d in project.Drawables)
+        foreach (var d in project.Drawables.Where(d => !d.Reserved))
         {
             var modelFile = Path.Combine(projectDir, d.ModelPath);
             if (!File.Exists(modelFile))
@@ -45,6 +45,8 @@ public static class ProjectValidator
         foreach (var group in project.Drawables.GroupBy(d => (d.Gender, d.Name)).Where(g => g.Count() > 1))
             issues.Add(new(IssueSeverity.Warning, $"Hay {group.Count()} prendas llamadas {group.Key.Name} ({group.Key.Gender})."));
 
+        if (cache is not null) FindDuplicates(issues, project, projectDir, cache);
+
         foreach (var t in project.Tattoos)
         {
             if (!File.Exists(Path.Combine(projectDir, t.TexturePath)))
@@ -59,6 +61,35 @@ public static class ProjectValidator
             issues.Add(new(IssueSeverity.Error, $"{props.Count()} props ({props.Key}); el máximo por sexo es {PedVariation.MaxDrawablesPerSlot}."));
 
         return issues;
+    }
+
+    // Same content means a double import or a copy that was never changed.
+    private static void FindDuplicates(List<ValidationIssue> issues, ClothingProject project, string projectDir, AnalysisCache cache)
+    {
+        string? HashOf(string relative)
+        {
+            var file = Path.Combine(projectDir, relative);
+            try
+            {
+                return File.Exists(file) ? cache.Hash(file) : null;
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+        }
+
+        var garments = project.Drawables.Where(d => !d.Reserved).ToList();
+        foreach (var group in garments.GroupBy(d => HashOf(d.ModelPath)).Where(g => g.Key is not null && g.Count() > 1))
+        {
+            var names = group.Select(d => d.Name).ToList();
+            issues.Add(new(IssueSeverity.Warning, $"{string.Join(", ", names)}: usan el mismo modelo; ¿se importó dos veces?", group.Last().Id));
+        }
+        foreach (var d in garments)
+        {
+            foreach (var group in d.Textures.Select((t, i) => (Hash: HashOf(t.TexturePath), Letter: TextureVariation.LetterFor(i))).Where(t => t.Hash is not null).GroupBy(t => t.Hash).Where(g => g.Count() > 1))
+                issues.Add(new(IssueSeverity.Warning, $"{d.Name}: las texturas {string.Join(", ", group.Select(t => t.Letter))} son idénticas.", d.Id));
+        }
     }
 
     private static void AnalyzeModel(List<ValidationIssue> issues, Drawable d, string relative, string file, AnalysisCache cache, AnalysisLimits limits)

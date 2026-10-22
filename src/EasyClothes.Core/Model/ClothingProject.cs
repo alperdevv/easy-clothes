@@ -19,7 +19,10 @@ public sealed class ClothingProject
 
     // The order drawables get their in-game index, and the order the tree shows them.
     public static List<Drawable> InGameOrder(IEnumerable<Drawable> drawables) =>
-        drawables.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ThenBy(d => d.Id).ToList();
+        drawables.OrderBy(d => d.Position).ThenBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ThenBy(d => d.Id).ToList();
+
+    public IEnumerable<Drawable> SameSlot(Drawable drawable) =>
+        Drawables.Where(d => d.Gender == drawable.Gender && d.Component == drawable.Component && d.Prop == drawable.Prop);
 }
 
 public sealed class Drawable
@@ -35,6 +38,12 @@ public sealed class Drawable
     public PropSlot? Prop { get; set; }
 
     public required string ModelPath { get; set; }
+
+    // Place within its slot; equal positions fall back to name order, as older projects have all zeros.
+    public int Position { get; set; }
+
+    // Keeps an in-game number for a garment added later; it exports with no files.
+    public bool Reserved { get; set; }
 
     public string? FirstPersonModelPath { get; set; }
 

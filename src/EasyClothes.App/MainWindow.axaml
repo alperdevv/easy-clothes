@@ -14,6 +14,8 @@
     <KeyBinding Gesture="Ctrl+I" Command="{Binding ImportCommand}" />
     <KeyBinding Gesture="Ctrl+Shift+I" Command="{Binding ImportFolderCommand}" />
     <KeyBinding Gesture="Ctrl+B" Command="{Binding BuildResourceCommand}" />
+    <KeyBinding Gesture="Alt+Up" Command="{Binding MoveUpCommand}" />
+    <KeyBinding Gesture="Alt+Down" Command="{Binding MoveDownCommand}" />
   </Window.KeyBindings>
 
   <DockPanel>
@@ -50,7 +52,10 @@
             </TreeView.ItemContainerTheme>
             <TreeView.ItemTemplate>
               <TreeDataTemplate DataType="vm:TreeNode" ItemsSource="{Binding Children}">
-                <TextBlock Text="{Binding Title}" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <TextBlock Classes="muted" Text="{Binding Number}" IsVisible="{Binding HasNumber}" FontFamily="Consolas,Menlo,monospace" />
+                  <TextBlock Text="{Binding Title}" />
+                </StackPanel>
               </TreeDataTemplate>
             </TreeView.ItemTemplate>
           </TreeView>
@@ -130,7 +135,23 @@
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
-            <StackPanel IsVisible="{Binding !IsProp}" Spacing="2">
+            <DockPanel Margin="0,6,0,0">
+              <Button DockPanel.Dock="Right" Classes="small" Content="▼" Margin="4,0,0,0" ToolTip.Tip="Bajar un número (Alt+↓)"
+                      Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoveDownCommand}" />
+              <Button DockPanel.Dock="Right" Classes="small" Content="▲" ToolTip.Tip="Subir un número (Alt+↑)"
+                      Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoveUpCommand}" />
+              <TextBlock Classes="muted" Text="{Binding NumberLabel}" VerticalAlignment="Center" />
+            </DockPanel>
+            <Button Classes="small" Content="Reservar un número más en este hueco" HorizontalAlignment="Stretch"
+                    ToolTip.Tip="Deja un número libre al final para una prenda futura, así los números de las demás no cambian"
+                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ReserveSlotCommand}" />
+            <StackPanel IsVisible="{Binding IsReserved}" Spacing="6" Margin="0,8,0,0">
+              <TextBlock Classes="muted" TextWrapping="Wrap"
+                         Text="Número reservado: en el juego existe pero no muestra nada hasta que le asignes una prenda." />
+              <Button Content="Asignar prenda…" HorizontalAlignment="Stretch"
+                      Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).FillReservedCommand}" />
+            </StackPanel>
+            <StackPanel IsVisible="{Binding HasExtras}" Spacing="2">
               <TextBlock Classes="label" Text="Primera persona" />
               <DockPanel ToolTip.Tip="Modelo que se ve desde la cámara en primera persona (…_1.ydd), por ejemplo una capucha recortada para que no tape la vista">
                 <Button DockPanel.Dock="Right" Classes="small" Content="Quitar" Margin="4,0,0,0" IsVisible="{Binding HasFirstPerson}"
@@ -163,8 +184,8 @@
               <ComboBox ItemsSource="{x:Static vm:DrawableViewModel.HatHairOptions}" SelectedIndex="{Binding HatHairIndex}" HorizontalAlignment="Stretch"
                         ToolTip.Tip="Solo afecta a peinados preparados para ello, como los del juego" />
             </StackPanel>
-            <TextBlock Classes="label" Text="{Binding Summary}" Margin="0,12,0,0" />
-            <ItemsControl ItemsSource="{Binding Textures}">
+            <TextBlock Classes="label" Text="{Binding Summary}" Margin="0,12,0,0" IsVisible="{Binding IsGarment}" />
+            <ItemsControl ItemsSource="{Binding Textures}" IsVisible="{Binding IsGarment}">
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:TextureItem">
                   <Grid ColumnDefinitions="18,*">

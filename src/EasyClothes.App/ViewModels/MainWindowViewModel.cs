@@ -476,7 +476,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
             await ImportDrawablesAsync([dir]);
     }
 
-    public async Task ImportDrawablesAsync(IReadOnlyList<string> paths)
+    public async Task<IReadOnlyList<Drawable>> ImportDrawablesAsync(IReadOnlyList<string> paths)
     {
         EnsureProject();
         var fallback = Selected?.Model.Gender ?? PedGender.Male;
@@ -493,7 +493,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Status = $"No se pudo importar: {ex.Message}";
-            return;
+            return [];
         }
         finally
         {
@@ -504,6 +504,43 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         MarkChanged(rebuildTree: true);
         Status = $"{result.Added.Count} prenda(s) importada(s)." + WarningsSummary(result.Warnings);
         if (result.Added.LastOrDefault() is { } last) Select(last.Id);
+        return result.Added;
+    }
+
+    [RelayCommand]
+    private void MoveUp() => MoveSelected(-1);
+
+    [RelayCommand]
+    private void MoveDown() => MoveSelected(1);
+
+    private void MoveSelected(int offset)
+    {
+        if (Selected is not { } drawable || !DrawableOrder.Move(Project!, drawable.Model, offset)) return;
+        MarkChanged(rebuildTree: true);
+        Status = $"{drawable.Name} pasa a ser el número {DrawableOrder.NumberOf(Project!, drawable.Model):000}.";
+    }
+
+    [RelayCommand]
+    private void ReserveSlot()
+    {
+        if (Selected is not { } drawable) return;
+        var reserved = DrawableOrder.Reserve(Project!, drawable.Model.Gender, drawable.Model.Component, drawable.Model.Prop);
+        MarkChanged(rebuildTree: true);
+        Select(reserved.Id);
+        Status = $"Número {DrawableOrder.NumberOf(Project!, reserved):000} reservado; asígnale una prenda cuando la tengas.";
+    }
+
+    [RelayCommand]
+    private async Task FillReservedAsync()
+    {
+        if (Selected is not { IsReserved: true } reserved) return;
+        var files = await dialogs.PickFilesAsync("Prenda para el hueco reservado", "Modelos de ropa", ["*.ydd"], multiple: false);
+        if (files.Count == 0) return;
+        if (await ImportDrawablesAsync(files) is not [var garment]) return;
+        DrawableOrder.Fill(Project!, reserved.Model, garment);
+        MarkChanged(rebuildTree: true);
+        Select(garment.Id);
+        Status = $"{garment.Name} ocupa el número {DrawableOrder.NumberOf(Project!, garment):000}.";
     }
 
     // Models and folders win over images, so dropping a whole stream folder's files imports clothes, not tattoos.
@@ -746,6 +783,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
 
     private void OnDrawableChanged(DrawableViewModel drawable, bool regroup)
     {
+        if (regroup) DrawableOrder.PlaceAtEnd(Project!, drawable.Model);
         if (!regroup && FindNode(drawable.Model.Id) is { } node) node.Title = drawable.Name;
         MarkChanged(rebuildTree: regroup);
     }
@@ -770,8 +808,8 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
                 var drawables = ClothingProject.InGameOrder(Project.DrawablesFor(gender.Value).Where(d => SlotOption.For(d) == slot));
                 if (drawables.Count == 0) continue;
                 var slotNode = new TreeNode($"{slot.Label} ({drawables.Count})");
-                foreach (var d in drawables)
-                    slotNode.Children.Add(new TreeNode(d.Name, new DrawableViewModel(d, OnDrawableChanged)));
+                for (var i = 0; i < drawables.Count; i++)
+                    slotNode.Children.Add(new TreeNode(drawables[i].Name, new DrawableViewModel(drawables[i], OnDrawableChanged) { Number = i }, number: $"{i:000}"));
                 genderNode.Children.Add(slotNode);
             }
             if (genderNode.Children.Count > 0) Tree.Add(genderNode);

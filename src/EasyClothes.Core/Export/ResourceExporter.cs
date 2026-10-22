@@ -70,6 +70,11 @@ public static class ResourceExporter
                 for (var i = 0; i < ordered.Count; i++)
                 {
                     var d = ordered[i];
+                    if (d.Reserved)
+                    {
+                        items.Add(new VariationDrawable(1));
+                        continue;
+                    }
                     var model = $"{ped}_{collection}^{code}_{i:000}_u";
                     files += Copy(projectDir, d.ModelPath, pedStream, $"{model}.ydd");
                     for (var t = 0; t < d.Textures.Count; t++)
@@ -98,13 +103,14 @@ public static class ResourceExporter
                 var prefix = $"{ped}_p_{collection}^{PedSlotNames.FileCode(slot.Key)}";
                 for (var i = 0; i < ordered.Count; i++)
                 {
+                    if (ordered[i].Reserved) continue;
                     files += Copy(projectDir, ordered[i].ModelPath, pedStream, $"{prefix}_{i:000}.ydd");
                     for (var t = 0; t < ordered[i].Textures.Count; t++)
                         files += Copy(projectDir, ordered[i].Textures[t].TexturePath, pedStream, $"{prefix}_diff_{i:000}_{TextureVariation.LetterFor(t)}.ytd");
                     if (ordered[i].FirstPersonModelPath is not null || ordered[i].ClothPhysicsPath is not null)
                         warnings.Add($"{ordered[i].Name}: los accesorios no admiten modelo de primera persona ni físicas de tela; se exporta sin ellos.");
                 }
-                props[slot.Key] = ordered.Select(d => new VariationDrawable(d.Textures.Count)
+                props[slot.Key] = ordered.Select(d => new VariationDrawable(d.Reserved ? 1 : d.Textures.Count)
                 {
                     HairScale = slot.Key == PropSlot.Hat ? HairScale(d.Flags.HatHair) : 0,
                 }).ToList();

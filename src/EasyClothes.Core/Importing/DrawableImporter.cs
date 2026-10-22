@@ -60,6 +60,7 @@ public static class DrawableImporter
             if (textures.Count > Drawable.MaxTextures)
                 warnings.Add($"{drawable.Name}: tiene {textures.Count} texturas y el juego admite {Drawable.MaxTextures}; se han ignorado las sobrantes.");
 
+            DrawableOrder.PlaceAtEnd(project, drawable);
             project.Drawables.Add(drawable);
             added.Add(drawable);
         }

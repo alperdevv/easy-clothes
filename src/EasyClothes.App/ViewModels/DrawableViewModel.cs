@@ -41,6 +41,7 @@ public sealed partial class DrawableViewModel(Drawable model, Action<DrawableVie
             Model.Prop = value.Slot.Prop;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsProp));
+            OnPropertyChanged(nameof(HasExtras));
             OnPropertyChanged(nameof(IsShoes));
             OnPropertyChanged(nameof(IsHat));
             onChanged(this, true);
@@ -48,8 +49,14 @@ public sealed partial class DrawableViewModel(Drawable model, Action<DrawableVie
     }
 
     public bool IsProp => Model.IsProp;
-    public bool IsShoes => Model.Component == ComponentSlot.Shoes;
-    public bool IsHat => Model.Prop == PropSlot.Hat;
+    public bool IsReserved => Model.Reserved;
+    public bool IsGarment => !Model.Reserved;
+    public bool HasExtras => !Model.IsProp && !Model.Reserved;
+
+    public int Number { get; init; }
+    public string NumberLabel => $"Número en el juego: {Number:000}";
+    public bool IsShoes => Model.Component == ComponentSlot.Shoes && !Model.Reserved;
+    public bool IsHat => Model.Prop == PropSlot.Hat && !Model.Reserved;
 
     public string FirstPersonLabel => Model.FirstPersonModelPath is { } path ? ShortName(path) : "Ninguno";
     public bool HasFirstPerson => Model.FirstPersonModelPath is not null;
