@@ -14,6 +14,14 @@ public sealed class ClothingProject
     public List<Drawable> Drawables { get; set; } = [];
     public List<Tattoo> Tattoos { get; set; } = [];
 
+    // A valid collection name (lowercase letters, digits and underscores) derived from a display name.
+    public static string CollectionNameFrom(string name)
+    {
+        var chars = name.ToLowerInvariant().Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_').ToArray();
+        var result = new string(chars).Trim('_');
+        return result.Length > 0 ? result : "pack";
+    }
+
     public IEnumerable<Drawable> DrawablesFor(PedGender gender) =>
         Drawables.Where(d => d.Gender == gender);
 

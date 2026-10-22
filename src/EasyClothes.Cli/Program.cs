@@ -169,22 +169,7 @@ static async Task<int> Import(string projectPath, string[] models)
 {
     var project = await ProjectFile.LoadAsync(projectPath);
     var dir = Path.GetDirectoryName(Path.GetFullPath(projectPath))!;
-    // A folder with a ped .ymt is a finished resource: import it keeping numbers and options.
-    var resources = models.Where(ResourceImporter.IsResource).ToList();
-    var added = new List<Drawable>();
-    var warnings = new List<string>();
-    foreach (var resource in resources)
-    {
-        var imported = ResourceImporter.Import(project, dir, resource);
-        added.AddRange(imported.Added);
-        warnings.AddRange(imported.Warnings);
-    }
-    if (models.Except(resources).ToList() is { Count: > 0 } loose)
-    {
-        var imported = DrawableImporter.Import(project, dir, loose, PedGender.Male);
-        added.AddRange(imported.Added);
-        warnings.AddRange(imported.Warnings);
-    }
+    var (added, warnings, _) = ResourceImporter.ImportAny(project, dir, models, PedGender.Male);
     await ProjectFile.SaveAsync(project, projectPath);
     foreach (var d in added) Console.WriteLine(d.Reserved ? $"+ {d.Gender} {d.Name}" : $"+ {d.Gender} {d.Name} ({d.Textures.Count} textures)");
     foreach (var w in warnings) Console.Error.WriteLine($"! {w}");

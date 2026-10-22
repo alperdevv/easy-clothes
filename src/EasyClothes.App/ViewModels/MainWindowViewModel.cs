@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EasyClothes.App.Services;
@@ -153,9 +154,11 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
 
         var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(dir));
-        var project = new ClothingProject { Name = name, CollectionName = ToCollectionName(name) };
-        await ProjectFile.SaveAsync(project, ProjectPathFor(dir, project));
+        var project = new ClothingProject { Name = name, CollectionName = ClothingProject.CollectionNameFrom(name) };
+        var file = ProjectPathFor(dir, project);
+        await ProjectFile.SaveAsync(project, file);
         LoadProject(project, dir);
+        Watch(file);
         Status = $"Proyecto creado en {dir}.";
     }
 
@@ -171,6 +174,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         try
         {
             LoadProject(await ProjectFile.LoadAsync(path), Path.GetDirectoryName(Path.GetFullPath(path))!);
+            Watch(Path.GetFullPath(path));
             Status = $"Proyecto abierto: {path}";
             SelectedNode = Tree.SelectMany(g => g.Children).SelectMany(s => s.Children).FirstOrDefault();
         }
@@ -210,7 +214,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
 
         Project!.Name = name;
-        if (Project.CollectionName == DraftCollection) CollectionName = ToCollectionName(name);
+        if (Project.CollectionName == DraftCollection) CollectionName = ClothingProject.CollectionNameFrom(name);
         ProjectDir = targetDir;
         IsDraft = false;
         await SaveProjectFileAsync();
@@ -221,11 +225,62 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
 
     private async Task SaveProjectFileAsync()
     {
-        var path = ProjectPathFor(ProjectDir!, Project!);
+        var path = _projectFile ?? ProjectPathFor(ProjectDir!, Project!);
         ProjectPackage.BackupProjectFile(path);
         await ProjectFile.SaveAsync(Project!, path);
         IsDirty = false;
+        Watch(path);
         Status = $"Proyecto guardado en {ProjectDir}.";
+    }
+
+    private string? _projectFile;
+    private FileSystemWatcher? _watcher;
+    private DateTime _knownWrite;
+
+    // Claude (through the MCP server) or another program may change the project file while it is open.
+    private void Watch(string? file)
+    {
+        _watcher?.Dispose();
+        _watcher = null;
+        _projectFile = file;
+        if (file is null || !File.Exists(file)) return;
+        _knownWrite = File.GetLastWriteTimeUtc(file);
+        _watcher = new FileSystemWatcher(Path.GetDirectoryName(file)!, Path.GetFileName(file))
+        {
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
+        };
+        FileSystemEventHandler changed = (_, _) => Dispatcher.UIThread.Post(() => _ = ReloadIfChangedAsync());
+        _watcher.Changed += changed;
+        _watcher.Created += changed;
+        _watcher.Renamed += (_, _) => Dispatcher.UIThread.Post(() => _ = ReloadIfChangedAsync());
+        _watcher.EnableRaisingEvents = true;
+    }
+
+    public async Task ReloadIfChangedAsync()
+    {
+        if (_projectFile is not { } file || !File.Exists(file)) return;
+        var stamp = File.GetLastWriteTimeUtc(file);
+        if (stamp == _knownWrite) return;
+        _knownWrite = stamp;
+        if (IsDirty && await dialogs.ChooseAsync("Proyecto cambiado fuera de la app",
+                "Otro programa (por ejemplo Claude) ha cambiado el proyecto y tú tienes cambios sin guardar.",
+                ["Cargar los cambios de fuera", "Mantener los míos"]) != 0)
+            return;
+
+        ClothingProject project;
+        try
+        {
+            project = await ProjectFile.LoadAsync(file);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException)
+        {
+            Status = $"El proyecto cambió fuera de la app pero no se pudo leer: {ex.Message}";
+            return;
+        }
+        var selected = Selected?.Model.Id ?? SelectedTattoo?.Model.Id;
+        LoadProject(project, ProjectDir!);
+        if (selected is { } id) Select(id);
+        Status = "Proyecto actualizado desde fuera de la app (por ejemplo, por Claude).";
     }
 
     private const string DraftCollection = "pack";
@@ -234,6 +289,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     {
         if (Project is not null) return;
         LoadProject(new ClothingProject { Name = DraftName, CollectionName = DraftCollection }, ProjectDraft.Create(DraftsRoot), draft: true);
+        Watch(null);
     }
 
     [RelayCommand(CanExecute = nameof(CanFix))]
@@ -486,10 +542,10 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         var dir = ProjectDir!;
         IsBusy = true;
         Status = "Importando prendas…";
-        (List<Drawable> Added, List<string> Warnings, string? Collection) result;
+        ResourceImportResult result;
         try
         {
-            result = await Task.Run(() => Import(staging, dir, paths, fallback));
+            result = await Task.Run(() => ResourceImporter.ImportAny(staging, dir, paths, fallback));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -511,29 +567,6 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         Status = $"{result.Added.Count(d => !d.Reserved)} prenda(s) importada(s)." + WarningsSummary(result.Warnings);
         if (result.Added.LastOrDefault() is { } last) Select(last.Id);
         return result.Added;
-    }
-
-    // Folders with a ped .ymt are finished resources and keep their numbers and options.
-    private static (List<Drawable>, List<string>, string?) Import(ClothingProject project, string dir, IReadOnlyList<string> paths, PedGender fallback)
-    {
-        var added = new List<Drawable>();
-        var warnings = new List<string>();
-        string? collection = null;
-        var resources = paths.Where(ResourceImporter.IsResource).ToList();
-        foreach (var resource in resources)
-        {
-            var result = ResourceImporter.Import(project, dir, resource);
-            added.AddRange(result.Added);
-            warnings.AddRange(result.Warnings);
-            collection ??= result.Collection;
-        }
-        if (paths.Except(resources).ToList() is { Count: > 0 } loose)
-        {
-            var result = DrawableImporter.Import(project, dir, loose, fallback);
-            added.AddRange(result.Added);
-            warnings.AddRange(result.Warnings);
-        }
-        return (added, warnings, collection);
     }
 
     [RelayCommand]
@@ -668,12 +701,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     [RelayCommand(CanExecute = nameof(CanFix))]
     private async Task FixAllAsync()
     {
-        // A resize also regenerates mips, so one fix per file is enough.
-        var fixes = Issues.Select(i => i.Issue.Fix).OfType<FixAction>()
-            .GroupBy(TargetOf)
-            .Select(g => g.OfType<ResizeTextureFix>().FirstOrDefault() ?? g.First())
-            .ToList();
-        await RunFixesAsync(fixes);
+        await RunFixesAsync(IssueFixer.OnePerFile(Issues.Select(i => i.Issue.Fix).OfType<FixAction>()));
     }
 
     private async Task RunFixesAsync(IReadOnlyList<FixAction> fixes)
@@ -694,7 +722,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
                 }
                 catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
                 {
-                    messages.Add($"{TargetOf(fix)}: no se pudo corregir ({ex.Message}).");
+                    messages.Add($"{IssueFixer.TargetOf(fix)}: no se pudo corregir ({ex.Message}).");
                 }
             }
             Status = fixes.Count == 1 ? messages[0] : $"{fixes.Count} correcciones aplicadas. {messages.Last()}";
@@ -706,14 +734,6 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         await ValidateAsync();
         await LoadPreviewAsync();
     }
-
-    private static string TargetOf(FixAction fix) => fix switch
-    {
-        ResizeTextureFix f => f.TexturePath,
-        RegenerateMipsFix f => f.TexturePath,
-        ReduceMeshFix f => f.ModelPath,
-        _ => fix.Label,
-    };
 
     [RelayCommand]
     private void SelectIssue(IssueViewModel? issue)
@@ -908,12 +928,5 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     }
 
     private static string ProjectPathFor(string dir, ClothingProject project) =>
-        Path.Combine(dir, ToCollectionName(project.Name) + ProjectFile.Extension);
-
-    private static string ToCollectionName(string name)
-    {
-        var chars = name.ToLowerInvariant().Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_').ToArray();
-        var result = new string(chars).Trim('_');
-        return result.Length > 0 ? result : "pack";
-    }
+        Path.Combine(dir, ClothingProject.CollectionNameFrom(project.Name) + ProjectFile.Extension);
 }

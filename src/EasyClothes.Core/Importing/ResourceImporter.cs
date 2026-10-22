@@ -17,6 +17,29 @@ public static class ResourceImporter
 
     public static bool IsResource(string dir) => Directory.Exists(dir) && FindVariations(dir).Any();
 
+    // Folders with a ped .ymt keep their numbers and options; everything else is imported garment by garment.
+    public static ResourceImportResult ImportAny(ClothingProject project, string projectDir, IReadOnlyList<string> paths, PedGender fallbackGender)
+    {
+        var added = new List<Drawable>();
+        var warnings = new List<string>();
+        string? collection = null;
+        var resources = paths.Where(IsResource).ToList();
+        foreach (var resource in resources)
+        {
+            var result = Import(project, projectDir, resource);
+            added.AddRange(result.Added);
+            warnings.AddRange(result.Warnings);
+            collection ??= result.Collection;
+        }
+        if (paths.Except(resources).ToList() is { Count: > 0 } loose)
+        {
+            var result = DrawableImporter.Import(project, projectDir, loose, fallbackGender);
+            added.AddRange(result.Added);
+            warnings.AddRange(result.Warnings);
+        }
+        return new ResourceImportResult(added, warnings, collection);
+    }
+
     public static ResourceImportResult Import(ClothingProject project, string projectDir, string resourceDir)
     {
         var warnings = new List<string>();

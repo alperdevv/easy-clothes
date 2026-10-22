@@ -71,8 +71,10 @@ public sealed class McpServerTests : IDisposable
         }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(["export_texture_png", "find_projects", "get_garment", "get_project", "render_garment", "validate"], tools.Select(t => t.Name).Order());
-        Assert.True(tools.Single(t => t.Name == "validate").ProtocolTool.Annotations?.ReadOnlyHint);
+        var readOnly = tools.Where(t => t.ProtocolTool.Annotations?.ReadOnlyHint == true).Select(t => t.Name).Order();
+        Assert.Equal(["find_projects", "get_garment", "get_project", "render_garment", "validate"], readOnly);
+        Assert.True(tools.Single(t => t.Name == "remove_garment").ProtocolTool.Annotations?.DestructiveHint);
+        Assert.All(tools, t => Assert.False(string.IsNullOrWhiteSpace(t.Description)));
 
         var found = await client.CallToolAsync("find_projects", new Dictionary<string, object?> { ["folder"] = _dir });
         Assert.Contains("\"name\":\"Ropa\"", Text(found));

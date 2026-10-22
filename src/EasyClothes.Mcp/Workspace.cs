@@ -61,6 +61,32 @@ public sealed class Workspace(ServerOptions options)
         };
     }
 
+    // Keeps the previous version under .backups/project before every write.
+    public static async Task SaveAsync(LoadedProject loaded, CancellationToken ct = default)
+    {
+        ProjectPackage.BackupProjectFile(loaded.File);
+        await ProjectFile.SaveAsync(loaded.Project, loaded.File, ct);
+    }
+
+    public static PedGender ParseGender(string gender) => gender.Trim().ToLowerInvariant() switch
+    {
+        "hombre" or "male" or "m" or "mp_m_freemode_01" => PedGender.Male,
+        "mujer" or "female" or "f" or "mp_f_freemode_01" => PedGender.Female,
+        _ => throw new McpException($"Sexo desconocido '{gender}'; usa hombre o mujer."),
+    };
+
+    // A file code ("jbib", "p_head") or the slot name ("Top", "Hat").
+    public static (ComponentSlot? Component, PropSlot? Prop) ParseSlot(string slot)
+    {
+        var text = slot.Trim();
+        foreach (var c in Enum.GetValues<ComponentSlot>())
+            if (text.Equals(PedSlotNames.FileCode(c), StringComparison.OrdinalIgnoreCase) || text.Equals(c.ToString(), StringComparison.OrdinalIgnoreCase)) return (c, null);
+        foreach (var p in Enum.GetValues<PropSlot>())
+            if (text.Equals(PedSlotNames.FileCode(p), StringComparison.OrdinalIgnoreCase) || text.Equals(p.ToString(), StringComparison.OrdinalIgnoreCase) || text.Equals("Prop" + p, StringComparison.OrdinalIgnoreCase)) return (null, p);
+        var codes = Enum.GetValues<ComponentSlot>().Select(c => PedSlotNames.FileCode(c)).Concat(Enum.GetValues<PropSlot>().Select(p => PedSlotNames.FileCode(p)));
+        throw new McpException($"Hueco desconocido '{slot}'; usa uno de: {string.Join(", ", codes)}.");
+    }
+
     public static int TextureIndex(Drawable drawable, string letter)
     {
         var index = letter.Trim().ToLowerInvariant() is [var c] ? c - 'a' : -1;

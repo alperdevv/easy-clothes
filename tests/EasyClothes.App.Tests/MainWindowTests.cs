@@ -278,6 +278,35 @@ public sealed class MainWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Changes_made_outside_the_app_reload_the_open_project()
+    {
+        var path = await SaveProject(new ClothingProject
+        {
+            Name = "UI",
+            CollectionName = "ui",
+            Drawables = [new Drawable { Name = "a", Component = ComponentSlot.Top, ModelPath = "a.ydd" }],
+        });
+        var window = new MainWindow();
+        window.Show();
+        var vm = window.ViewModel;
+        await vm.OpenProjectFileAsync(path);
+
+        var outside = await ProjectFile.LoadAsync(path);
+        outside.Drawables.Add(new Drawable { Name = "b", Component = ComponentSlot.Top, ModelPath = "b.ydd", Position = 1 });
+        await ProjectFile.SaveAsync(outside, path);
+        for (var i = 0; i < 100 && !vm.Status.Contains("desde fuera"); i++)
+        {
+            await Task.Delay(30);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Assert.Equal(["000 a", "001 b"], TopNodes(vm));
+        Assert.False(vm.IsDirty);
+        await vm.SaveCommand.ExecuteAsync(null);
+        Assert.Single(Directory.GetFiles(_dir, "*" + ProjectFile.Extension));
+    }
+
+    [AvaloniaFact]
     public void Choosing_the_body_folder_persists_and_can_be_turned_off()
     {
         var window = new MainWindow();

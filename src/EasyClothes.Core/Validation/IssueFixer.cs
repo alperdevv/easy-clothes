@@ -6,15 +6,21 @@ namespace EasyClothes.Core.Validation;
 
 public static class IssueFixer
 {
+    public static string TargetOf(FixAction fix) => fix switch
+    {
+        ResizeTextureFix f => f.TexturePath,
+        RegenerateMipsFix f => f.TexturePath,
+        ReduceMeshFix f => f.ModelPath,
+        _ => throw new NotSupportedException(fix.GetType().Name),
+    };
+
+    // A resize also regenerates mips, so one fix per file is enough.
+    public static IReadOnlyList<FixAction> OnePerFile(IEnumerable<FixAction> fixes) =>
+        fixes.GroupBy(TargetOf).Select(g => g.OfType<ResizeTextureFix>().FirstOrDefault() ?? g.First()).ToList();
+
     public static string Apply(FixAction fix, string projectDir)
     {
-        var relative = fix switch
-        {
-            ResizeTextureFix f => f.TexturePath,
-            RegenerateMipsFix f => f.TexturePath,
-            ReduceMeshFix f => f.ModelPath,
-            _ => throw new NotSupportedException(fix.GetType().Name),
-        };
+        var relative = TargetOf(fix);
         var path = Path.Combine(projectDir, relative);
         var backup = ProjectBackups.Copy(projectDir, relative);
 
