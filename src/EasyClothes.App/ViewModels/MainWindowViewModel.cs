@@ -363,7 +363,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         try
         {
             var path = Path.Combine(ProjectDir!, texture.RelativePath);
-            var (document, note) = await Task.Run(() => OpenTextureDocument(path));
+            var (document, note) = await Task.Run(() => TextureDocumentFile.Open(path));
             var preview = Preview;
             return new TextureEditorViewModel(dialogs, ProjectDir!, drawable.Model, texture.Index, document, preview?.Meshes ?? [], preview?.Body ?? [], note);
         }
@@ -371,24 +371,6 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         {
             Status = $"No se pudo abrir la textura: {ex.Message}";
             return null;
-        }
-    }
-
-    // Resumes the saved layers when they still match the texture; a texture changed elsewhere starts afresh.
-    private static (TextureDocument Document, string? Note) OpenTextureDocument(string texturePath)
-    {
-        var layered = TextureDocumentFile.PathFor(texturePath);
-        var original = TextureDocument.FromTexture(ImageLoader.Load(texturePath));
-        if (!File.Exists(layered)) return (original, null);
-        try
-        {
-            return TextureDocumentFile.TryLoad(layered, TextureDocumentFile.HashOf(texturePath)) is { } document
-                ? (document, "Capas recuperadas de la última edición.")
-                : (original, "La textura ha cambiado desde la última edición; se abre la textura actual sin las capas guardadas.");
-        }
-        catch (Exception ex) when (ex is InvalidDataException or System.Text.Json.JsonException)
-        {
-            return (original, $"No se pudieron leer las capas guardadas ({ex.Message}); se abre la textura sin ellas.");
         }
     }
 

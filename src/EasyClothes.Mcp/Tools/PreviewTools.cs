@@ -105,7 +105,7 @@ public sealed class PreviewTools(Workspace workspace)
         ];
     }
 
-    private static float ParseView(string view) =>
+    internal static float ParseView(string view) =>
         Views.TryGetValue(view, out var yaw) ? yaw
         : float.TryParse(view, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var degrees) ? degrees
         : throw new McpException($"Vista desconocida '{view}'; usa front, left, back, right o grados.");

@@ -20,6 +20,24 @@ public static class TextureDocumentFile
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
 
+    // Resumes the saved layers when they still match the texture; a texture changed elsewhere starts afresh.
+    public static (TextureDocument Document, string? Note) Open(string texturePath)
+    {
+        var layered = PathFor(texturePath);
+        var original = TextureDocument.FromTexture(ImageLoader.Load(texturePath));
+        if (!File.Exists(layered)) return (original, null);
+        try
+        {
+            return TryLoad(layered, HashOf(texturePath)) is { } document
+                ? (document, "Capas recuperadas de la última edición.")
+                : (original, "La textura ha cambiado desde la última edición; se abre la textura actual sin las capas guardadas.");
+        }
+        catch (Exception ex) when (ex is InvalidDataException or System.Text.Json.JsonException)
+        {
+            return (original, $"No se pudieron leer las capas guardadas ({ex.Message}); se abre la textura sin ellas.");
+        }
+    }
+
     public static string PathFor(string texturePath) => Path.ChangeExtension(texturePath, Extension);
 
     public static string HashOf(string file)
