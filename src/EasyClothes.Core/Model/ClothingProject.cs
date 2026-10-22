@@ -38,6 +38,9 @@ public sealed class Drawable
 
     public string? FirstPersonModelPath { get; set; }
 
+    // Cloth simulation (.yld) streamed next to the model, e.g. for skirts and capes.
+    public string? ClothPhysicsPath { get; set; }
+
     public List<TextureVariation> Textures { get; set; } = [];
     public DrawableFlags Flags { get; set; } = new();
 
@@ -54,9 +57,20 @@ public sealed class TextureVariation
             : throw new ArgumentOutOfRangeException(nameof(index), index, $"Texture index must be 0..{Drawable.MaxTextures - 1}.");
 }
 
+public enum HatHair
+{
+    Keep,
+    Cut,
+    Remove,
+}
+
 public sealed class DrawableFlags
 {
-    public bool HideHair { get; set; }
+    // Hats: how much hair stays visible underneath. Cut is what the game's own hats use.
+    public HatHair HatHair { get; set; } = HatHair.Cut;
+
+    // Shoes: lifts the ped like the game's heels; 1 is their usual height (a sole about 9 cm lower).
+    public float? HeelHeight { get; set; }
 
     public bool KnockOffOnHit { get; set; }
 }

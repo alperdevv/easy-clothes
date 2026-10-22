@@ -5,21 +5,29 @@ using static EasyClothes.Core.Rage.Meta.PedVariationSchema;
 
 namespace EasyClothes.Core.Rage;
 
-// Contents of a ped variation .ymt: how many texture variations each drawable has,
-// per component slot and per prop anchor, in drawable order.
+// One drawable as the .ymt sees it. HeelHeight only matters for shoes and HairScale for hats.
+public sealed record VariationDrawable(int Textures)
+{
+    public bool FirstPerson { get; init; }
+    public bool Cloth { get; init; }
+    public float HeelHeight { get; init; }
+    public float HairScale { get; init; }
+}
+
+// Contents of a ped variation .ymt: the drawables of each component slot and prop anchor, in drawable order.
 public sealed record PedVariation(
     uint DlcNameHash,
-    IReadOnlyDictionary<ComponentSlot, IReadOnlyList<int>> Components,
-    IReadOnlyDictionary<PropSlot, IReadOnlyList<int>> Props)
+    IReadOnlyDictionary<ComponentSlot, IReadOnlyList<VariationDrawable>> Components,
+    IReadOnlyDictionary<PropSlot, IReadOnlyList<VariationDrawable>> Props)
 {
     public const int MaxDrawablesPerSlot = 255;
     private const int ComponentSlots = 12;
-    private const uint AudioNone = 0x1D632BA1;
-    private const uint HatHairExpression = 0xBF000000; // -0.5f, as the game's own hats use
+    private static readonly uint AudioNone = Jenkins.Hash("none");
+    private static readonly uint AudioHeels = Jenkins.Hash("shoe_heels");
 
     public static ResourceFile Write(string dlcName,
-        IReadOnlyDictionary<ComponentSlot, IReadOnlyList<int>> components,
-        IReadOnlyDictionary<PropSlot, IReadOnlyList<int>> props)
+        IReadOnlyDictionary<ComponentSlot, IReadOnlyList<VariationDrawable>> components,
+        IReadOnlyDictionary<PropSlot, IReadOnlyList<VariationDrawable>> props)
     {
         var builder = new MetaBuilder();
         var root = new byte[0x70];
@@ -31,31 +39,35 @@ public sealed record PedVariation(
         var componentData = new byte[usedSlots.Count * 0x18];
         for (var i = 0; i < usedSlots.Count; i++)
         {
-            var (slot, textureCounts) = (usedSlots[i].Key, usedSlots[i].Value);
-            CheckCount(slot.ToString(), textureCounts);
+            var (slot, items) = (usedSlots[i].Key, usedSlots[i].Value);
+            CheckCount(slot.ToString(), items);
             root[4 + (int)slot] = (byte)i;
 
-            var drawables = new byte[textureCounts.Count * 0x30];
-            for (var d = 0; d < textureCounts.Count; d++)
+            var drawables = new byte[items.Count * 0x30];
+            for (var d = 0; d < items.Count; d++)
             {
-                var textures = new byte[textureCounts[d] * 3];
-                for (var t = 0; t < textureCounts[d]; t++) textures[t * 3 + 1] = 0xFF;
+                var textures = new byte[items[d].Textures * 3];
+                for (var t = 0; t < items[d].Textures; t++) textures[t * 3 + 1] = 0xFF;
                 var item = drawables.AsSpan(d * 0x30, 0x30);
                 item[0] = 1; // propMask: universal ("_u") drawable
-                MetaBuilder.WriteArray(item[8..], builder.Append(TextureData, textures), textureCounts[d]);
+                item[1] = (byte)(items[d].FirstPerson ? 1 : 0); // alternates: "_1" is the first person model
+                item[0x18] = (byte)(items[d].Cloth ? 1 : 0);
+                MetaBuilder.WriteArray(item[8..], builder.Append(TextureData, textures), items[d].Textures);
             }
             var entry = componentData.AsSpan(i * 0x18, 0x18);
-            entry[0] = (byte)Math.Min(255, textureCounts.Sum());
-            MetaBuilder.WriteArray(entry[8..], builder.Append(DrawableData, drawables), textureCounts.Count);
+            entry[0] = (byte)Math.Min(255, items.Sum(d => d.Textures));
+            MetaBuilder.WriteArray(entry[8..], builder.Append(DrawableData, drawables), items.Count);
         }
         MetaBuilder.WriteArray(root.AsSpan(0x10), usedSlots.Count > 0 ? builder.Append(ComponentData, componentData) : null, usedSlots.Count);
 
-        var infos = usedSlots.SelectMany(s => s.Value.Select((_, d) => (Slot: s.Key, Drawable: d))).ToList();
+        var infos = usedSlots.SelectMany(s => s.Value.Select((v, d) => (Slot: s.Key, Drawable: d, v.HeelHeight))).ToList();
         var componentInfos = new byte[infos.Count * 0x30];
         for (var i = 0; i < infos.Count; i++)
         {
             var item = componentInfos.AsSpan(i * 0x30, 0x30);
-            BinaryPrimitives.WriteUInt32LittleEndian(item, AudioNone);
+            var heels = infos[i].HeelHeight > 0;
+            BinaryPrimitives.WriteUInt32LittleEndian(item, heels ? AudioHeels : AudioNone);
+            if (heels) BinaryPrimitives.WriteSingleLittleEndian(item[0x18..], infos[i].HeelHeight); // expressionMods[4]
             item[0x2C] = (byte)infos[i].Slot;
             item[0x2D] = (byte)infos[i].Drawable;
         }
@@ -68,7 +80,7 @@ public sealed record PedVariation(
         return builder.Build(dlcName, Structs, Enums);
     }
 
-    private static void WriteProps(MetaBuilder builder, Span<byte> propInfo, IReadOnlyDictionary<PropSlot, IReadOnlyList<int>> props)
+    private static void WriteProps(MetaBuilder builder, Span<byte> propInfo, IReadOnlyDictionary<PropSlot, IReadOnlyList<VariationDrawable>> props)
     {
         var anchors = props.Where(p => p.Value.Count > 0).OrderBy(p => p.Key).ToList();
         var total = anchors.Sum(a => a.Value.Count);
@@ -76,20 +88,20 @@ public sealed record PedVariation(
 
         var metaData = new byte[total * 0x38];
         var n = 0;
-        foreach (var (anchor, textureCounts) in anchors)
+        foreach (var (anchor, items) in anchors)
         {
-            CheckCount(anchor.ToString(), textureCounts);
-            for (var p = 0; p < textureCounts.Count; p++, n++)
+            CheckCount(anchor.ToString(), items);
+            for (var p = 0; p < items.Count; p++, n++)
             {
-                var textures = new byte[textureCounts[p] * 0xC];
-                for (var t = 0; t < textureCounts[p]; t++)
+                var textures = new byte[items[p].Textures * 0xC];
+                for (var t = 0; t < items[p].Textures; t++)
                 {
                     textures[t * 0xC + 8] = (byte)t;
                     textures[t * 0xC + 0xB] = 0xFF;
                 }
                 var item = metaData.AsSpan(n * 0x38, 0x38);
-                if (anchor == PropSlot.Hat) BinaryPrimitives.WriteUInt32LittleEndian(item[4..], HatHairExpression);
-                MetaBuilder.WriteArray(item[0x18..], builder.Append(PropTextureData, textures), textureCounts[p]);
+                BinaryPrimitives.WriteSingleLittleEndian(item[4..], items[p].HairScale); // expressionMods[0]
+                MetaBuilder.WriteArray(item[0x18..], builder.Append(PropTextureData, textures), items[p].Textures);
                 item[0x32] = (byte)anchor;
                 item[0x33] = (byte)p;
             }
@@ -100,7 +112,7 @@ public sealed record PedVariation(
         var anchorData = new byte[anchors.Count * 0x18];
         for (var i = 0; i < anchors.Count; i++)
         {
-            var counts = anchors[i].Value.Select(c => (byte)c).ToArray();
+            var counts = anchors[i].Value.Select(c => (byte)c.Textures).ToArray();
             var item = anchorData.AsSpan(i * 0x18, 0x18);
             MetaBuilder.WriteArray(item, builder.Append(MetaBuilder.ByteType, counts), counts.Length);
             BinaryPrimitives.WriteUInt32LittleEndian(item[0x10..], (uint)anchors[i].Key);
@@ -108,13 +120,13 @@ public sealed record PedVariation(
         MetaBuilder.WriteArray(propInfo[0x18..], anchors.Count > 0 ? builder.Append(AnchorProps, anchorData) : null, anchors.Count);
     }
 
-    private static void CheckCount(string slot, IReadOnlyList<int> textureCounts)
+    private static void CheckCount(string slot, IReadOnlyList<VariationDrawable> items)
     {
-        if (textureCounts.Count > MaxDrawablesPerSlot)
-            throw new InvalidDataException($"{slot}: {textureCounts.Count} drawables; a .ymt holds at most {MaxDrawablesPerSlot} per slot.");
-        foreach (var count in textureCounts)
-            if (count is < 1 or > Drawable.MaxTextures)
-                throw new InvalidDataException($"{slot}: a drawable has {count} textures; it needs 1 to {Drawable.MaxTextures}.");
+        if (items.Count > MaxDrawablesPerSlot)
+            throw new InvalidDataException($"{slot}: {items.Count} drawables; a .ymt holds at most {MaxDrawablesPerSlot} per slot.");
+        foreach (var item in items)
+            if (item.Textures is < 1 or > Drawable.MaxTextures)
+                throw new InvalidDataException($"{slot}: a drawable has {item.Textures} textures; it needs 1 to {Drawable.MaxTextures}.");
     }
 
     public static PedVariation Read(ResourceFile resource)
@@ -122,29 +134,53 @@ public sealed record PedVariation(
         var meta = new MetaReader(resource);
         var root = meta.Root;
 
-        var components = new Dictionary<ComponentSlot, IReadOnlyList<int>>();
+        var heels = new Dictionary<(int Slot, int Drawable), float>();
+        var infos = meta.Array(root[0x30..], 0x30, out var infoCount);
+        for (var i = 0; i < infoCount; i++)
+        {
+            var item = infos.Slice(i * 0x30, 0x30);
+            heels[(item[0x2C], item[0x2D])] = BinaryPrimitives.ReadSingleLittleEndian(item[0x18..]);
+        }
+
+        var components = new Dictionary<ComponentSlot, IReadOnlyList<VariationDrawable>>();
         var componentData = meta.Array(root[0x10..], 0x18, out _);
         for (var slot = 0; slot < ComponentSlots; slot++)
         {
             var index = root[4 + slot];
             if (index == 0xFF) continue;
             var drawables = meta.Array(componentData.Slice(index * 0x18 + 8), 0x30, out var count);
-            var counts = new int[count];
+            var items = new VariationDrawable[count];
             for (var d = 0; d < count; d++)
             {
-                meta.Array(drawables.Slice(d * 0x30 + 8), 3, out var textures);
-                counts[d] = textures;
+                var item = drawables.Slice(d * 0x30, 0x30);
+                meta.Array(item[8..], 3, out var textures);
+                items[d] = new VariationDrawable(textures)
+                {
+                    FirstPerson = item[1] > 0,
+                    Cloth = item[0x18] > 0,
+                    HeelHeight = heels.GetValueOrDefault((slot, d)),
+                };
             }
-            components[(ComponentSlot)slot] = counts;
+            components[(ComponentSlot)slot] = items;
         }
 
-        var props = new Dictionary<PropSlot, IReadOnlyList<int>>();
+        var hair = new Dictionary<(int Anchor, int Prop), float>();
+        var propData = meta.Array(root[0x48..], 0x38, out var propCount);
+        for (var i = 0; i < propCount; i++)
+        {
+            var item = propData.Slice(i * 0x38, 0x38);
+            hair[(item[0x32], item[0x33])] = BinaryPrimitives.ReadSingleLittleEndian(item[4..]);
+        }
+
+        var props = new Dictionary<PropSlot, IReadOnlyList<VariationDrawable>>();
         var anchors = meta.Array(root[0x58..], 0x18, out var anchorCount);
         for (var i = 0; i < anchorCount; i++)
         {
             var item = anchors.Slice(i * 0x18, 0x18);
-            var counts = meta.Array(item, 1, out _).ToArray().Select(b => (int)b).ToArray();
-            props[(PropSlot)BinaryPrimitives.ReadUInt32LittleEndian(item[0x10..])] = counts;
+            var anchor = (int)BinaryPrimitives.ReadUInt32LittleEndian(item[0x10..]);
+            props[(PropSlot)anchor] = meta.Array(item, 1, out _).ToArray()
+                .Select((textures, p) => new VariationDrawable(textures) { HairScale = hair.GetValueOrDefault((anchor, p)) })
+                .ToArray();
         }
 
         return new PedVariation(BinaryPrimitives.ReadUInt32LittleEndian(root[0x68..]), components, props);

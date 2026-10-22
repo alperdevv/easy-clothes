@@ -52,6 +52,26 @@ public sealed class ImporterTests : IDisposable
     }
 
     [Fact]
+    public void First_person_models_and_cloth_physics_come_along_with_their_garment()
+    {
+        Touch("mp_f_freemode_01_mine^lowr_002_u.ydd");
+        Touch("mp_f_freemode_01_mine^lowr_diff_002_a_uni.ytd");
+        Touch("mp_f_freemode_01_mine^lowr_002_u_1.ydd");
+        Touch("mp_f_freemode_01_mine^lowr_002_u.yld");
+        Touch("other/jbib_005_u_1.ydd");
+        var project = NewProject();
+
+        var result = DrawableImporter.Import(project, ProjectDir, [Source], PedGender.Male);
+
+        var skirt = Assert.Single(result.Added);
+        Assert.EndsWith("lowr_002_u_1.ydd", skirt.FirstPersonModelPath);
+        Assert.EndsWith("lowr_002_u.yld", skirt.ClothPhysicsPath);
+        Assert.True(File.Exists(Path.Combine(ProjectDir, skirt.ClothPhysicsPath!)));
+        Assert.Contains(result.Warnings, w => w.Contains("jbib_005_u_1.ydd") && w.Contains("primera persona"));
+        Assert.DoesNotContain(ProjectValidator.Validate(project, ProjectDir), i => i.Severity == IssueSeverity.Error);
+    }
+
+    [Fact]
     public void Warns_about_unrecognised_names_and_missing_textures()
     {
         var unknown = Touch("jacket.ydd");

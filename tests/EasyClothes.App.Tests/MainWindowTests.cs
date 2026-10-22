@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using EasyClothes.App.ViewModels;
 using EasyClothes.App.Viewer;
 using EasyClothes.Core.Importing;
@@ -175,6 +176,54 @@ public sealed class MainWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Shoes_show_heels_hats_show_hair_and_extras_reach_the_project_file()
+    {
+        File.WriteAllText(Path.Combine(_dir, "feet.ydd"), "");
+        File.WriteAllText(Path.Combine(_dir, "jacket_fp.ydd"), "fp");
+        var path = await SaveProject(new ClothingProject
+        {
+            Name = "UI",
+            CollectionName = "ui",
+            Drawables =
+            [
+                new Drawable { Name = "tacones", Gender = PedGender.Female, Component = ComponentSlot.Shoes, ModelPath = "feet.ydd" },
+                new Drawable { Name = "gorra", Gender = PedGender.Female, Prop = PropSlot.Hat, ModelPath = "hat.ydd" },
+                new Drawable { Name = "chaqueta", Gender = PedGender.Female, Component = ComponentSlot.Top, ModelPath = "models/jacket.ydd" },
+            ],
+        });
+        var window = new MainWindow();
+        window.Show();
+        var vm = window.ViewModel;
+        await vm.OpenProjectFileAsync(path);
+
+        SelectByName(vm, "tacones");
+        Dispatcher.UIThread.RunJobs();
+        var heels = window.GetVisualDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, "Tacones"));
+        Assert.True(heels.IsEffectivelyVisible);
+        heels.IsChecked = true;
+        vm.Selected!.HeelHeight = 1.4m;
+        await vm.DetectHeelCommand.ExecuteAsync(null);
+        Assert.Contains("No se pudo leer", vm.Status);
+
+        SelectByName(vm, "gorra");
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(heels.IsEffectivelyVisible);
+        vm.Selected!.HatHairIndex = (int)HatHair.Remove;
+
+        SelectByName(vm, "chaqueta");
+        DrawableImporter.AttachFirstPerson(vm.ProjectDir!, vm.Selected!.Model, Path.Combine(_dir, "jacket_fp.ydd"));
+        vm.Selected.RefreshExtras();
+        Assert.Equal("jacket_1.ydd", vm.Selected.FirstPersonLabel);
+        await vm.SaveCommand.ExecuteAsync(null);
+
+        var saved = await ProjectFile.LoadAsync(path);
+        Assert.Equal(1.4f, saved.Drawables.Single(d => d.Name == "tacones").Flags.HeelHeight);
+        Assert.Equal(HatHair.Remove, saved.Drawables.Single(d => d.Name == "gorra").Flags.HatHair);
+        Assert.Equal("models/jacket_1.ydd", saved.Drawables.Single(d => d.Name == "chaqueta").FirstPersonModelPath);
+        Assert.Equal("fp", File.ReadAllText(Path.Combine(_dir, "models", "jacket_1.ydd")));
+    }
+
+    [AvaloniaFact]
     public void Choosing_the_body_folder_persists_and_can_be_turned_off()
     {
         var window = new MainWindow();
@@ -278,6 +327,9 @@ public sealed class MainWindowTests : IDisposable
         Directory.CreateDirectory(dir);
         window.CaptureRenderedFrame()?.Save(Path.Combine(dir, name), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
+
+    private static void SelectByName(MainWindowViewModel vm, string name) =>
+        vm.SelectedNode = vm.Tree.SelectMany(g => g.Children).SelectMany(s => s.Children).Single(n => n.Title == name);
 
     private async Task<string> SaveProject(ClothingProject project)
     {

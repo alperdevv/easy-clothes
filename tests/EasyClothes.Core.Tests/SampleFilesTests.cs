@@ -1,3 +1,4 @@
+using EasyClothes.Core.Analysis;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Rage;
 using EasyClothes.Core.Rage.Meta;
@@ -139,7 +140,7 @@ public class SampleFilesTests
                 var code = PedSlotNames.FileCode(slot);
                 Assert.Equal(Directory.GetFiles(stream, $"{collection}^{code}_???_u.ydd").Length, counts.Count);
                 for (var d = 0; d < counts.Count; d++)
-                    Assert.Equal(Directory.GetFiles(stream, $"{collection}^{code}_diff_{d:000}_?_uni.ytd").Length, counts[d]);
+                    Assert.Equal(Directory.GetFiles(stream, $"{collection}^{code}_diff_{d:000}_?_uni.ytd").Length, counts[d].Textures);
             }
             var propCollection = collection.Replace("_freemode_01_", "_freemode_01_p_");
             foreach (var (slot, counts) in variation.Props)
@@ -151,6 +152,29 @@ public class SampleFilesTests
             for (var i = 0; i < source.Blocks.Count; i++)
                 Assert.True(source.Block(i).TrimEnd((byte)0).SequenceEqual(rewritten.Block(i).TrimEnd((byte)0)), $"{path}: block {i} differs");
         }
+    }
+
+    [Fact]
+    public void Sample_creature_metadata_reads_and_rewrites_byte_for_byte()
+    {
+        foreach (var path in Samples("mp_creaturemetadata_*.ymt"))
+        {
+            var original = File.ReadAllBytes(path);
+            var document = Rbf.Read(original);
+            Assert.Equal("CCreatureMetaData", document.Name.LocalName);
+            Assert.Equal(original, Rbf.Write(document));
+        }
+    }
+
+    // Set EASYCLOTHES_BODY to the exported freemode ped folder (with mp_f_freemode_01/feet_*.ydd).
+    [Fact]
+    public void Heel_height_is_estimated_from_the_shoe_sole()
+    {
+        if (Environment.GetEnvironmentVariable("EASYCLOTHES_BODY") is not { } body) return;
+        var female = Path.Combine(body, "mp_f_freemode_01");
+
+        Assert.Equal(1.0f, HeelEstimator.Estimate(Path.Combine(female, "feet_000_r.ydd")));
+        Assert.Null(HeelEstimator.Estimate(Path.Combine(female, "feet_001_u.ydd")));
     }
 
     private static IEnumerable<string> Samples(string pattern) =>

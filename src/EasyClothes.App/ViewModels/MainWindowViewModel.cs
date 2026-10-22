@@ -388,6 +388,80 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
     }
 
+    [RelayCommand]
+    private async Task ChooseFirstPersonAsync()
+    {
+        if (Selected is not { } drawable || ProjectDir is not { } dir) return;
+        var files = await dialogs.PickFilesAsync("Modelo de primera persona", "Modelo de ropa", ["*.ydd"], multiple: false);
+        if (files.Count == 0) return;
+        AttachExtra(drawable, () => DrawableImporter.AttachFirstPerson(dir, drawable.Model, files[0]), "Modelo de primera persona añadido.");
+    }
+
+    [RelayCommand]
+    private void ClearFirstPerson()
+    {
+        if (Selected is not { } drawable) return;
+        AttachExtra(drawable, () => drawable.Model.FirstPersonModelPath = null, "Modelo de primera persona quitado.");
+    }
+
+    [RelayCommand]
+    private async Task ChooseClothPhysicsAsync()
+    {
+        if (Selected is not { } drawable || ProjectDir is not { } dir) return;
+        var files = await dialogs.PickFilesAsync("Físicas de tela", "Físicas de tela", ["*.yld"], multiple: false);
+        if (files.Count == 0) return;
+        AttachExtra(drawable, () => DrawableImporter.AttachClothPhysics(dir, drawable.Model, files[0]), "Físicas de tela añadidas.");
+    }
+
+    [RelayCommand]
+    private void ClearClothPhysics()
+    {
+        if (Selected is not { } drawable) return;
+        AttachExtra(drawable, () => drawable.Model.ClothPhysicsPath = null, "Físicas de tela quitadas.");
+    }
+
+    private void AttachExtra(DrawableViewModel drawable, Action change, string done)
+    {
+        try
+        {
+            change();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Status = $"No se pudo copiar el archivo: {ex.Message}";
+            return;
+        }
+        drawable.RefreshExtras();
+        MarkChanged(rebuildTree: false);
+        Status = done;
+    }
+
+    [RelayCommand]
+    private async Task DetectHeelAsync()
+    {
+        if (Selected is not { } drawable || ProjectDir is not { } dir) return;
+        var model = Path.Combine(dir, drawable.Model.ModelPath);
+        float? height;
+        try
+        {
+            height = await Task.Run(() => HeelEstimator.Estimate(model));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
+        {
+            Status = $"No se pudo leer el modelo: {ex.Message}";
+            return;
+        }
+        if (height is null)
+        {
+            Status = $"{drawable.Name}: la suela está a ras de suelo, no parece un tacón.";
+            return;
+        }
+        drawable.Model.Flags.HeelHeight = height;
+        drawable.RefreshExtras();
+        MarkChanged(rebuildTree: false);
+        Status = $"{drawable.Name}: tacón detectado, altura {height:0.0}.";
+    }
+
     [RelayCommand(CanExecute = nameof(CanImport))]
     private async Task ImportAsync()
     {

@@ -130,6 +130,39 @@
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
+            <StackPanel IsVisible="{Binding !IsProp}" Spacing="2">
+              <TextBlock Classes="label" Text="Primera persona" />
+              <DockPanel ToolTip.Tip="Modelo que se ve desde la cámara en primera persona (…_1.ydd), por ejemplo una capucha recortada para que no tape la vista">
+                <Button DockPanel.Dock="Right" Classes="small" Content="Quitar" Margin="4,0,0,0" IsVisible="{Binding HasFirstPerson}"
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ClearFirstPersonCommand}" />
+                <Button DockPanel.Dock="Right" Classes="small" Content="Elegir…"
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChooseFirstPersonCommand}" />
+                <TextBlock Classes="muted" Text="{Binding FirstPersonLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              </DockPanel>
+              <TextBlock Classes="label" Text="Físicas de tela" />
+              <DockPanel ToolTip.Tip="Simulación de tela (.yld) para faldas, capas o abrigos que se mueven al andar">
+                <Button DockPanel.Dock="Right" Classes="small" Content="Quitar" Margin="4,0,0,0" IsVisible="{Binding HasClothPhysics}"
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ClearClothPhysicsCommand}" />
+                <Button DockPanel.Dock="Right" Classes="small" Content="Elegir…"
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChooseClothPhysicsCommand}" />
+                <TextBlock Classes="muted" Text="{Binding ClothPhysicsLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              </DockPanel>
+            </StackPanel>
+            <StackPanel IsVisible="{Binding IsShoes}" Spacing="4" Margin="0,8,0,0">
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Classes="small" Content="Detectar" ToolTip.Tip="Calcula la altura midiendo la suela del modelo"
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).DetectHeelCommand}" />
+                <CheckBox Content="Tacones" IsChecked="{Binding HasHeels}"
+                          ToolTip.Tip="Levanta al personaje para que el tacón no atraviese el suelo y usa el sonido de pisada de tacón" />
+              </DockPanel>
+              <NumericUpDown Value="{Binding HeelHeight}" Increment="0.1" Minimum="0.1" Maximum="3" FormatString="0.0" IsVisible="{Binding HasHeels}"
+                             ToolTip.Tip="1 es la altura de los tacones del juego (suela unos 9 cm más baja)" />
+            </StackPanel>
+            <StackPanel IsVisible="{Binding IsHat}" Spacing="2" Margin="0,8,0,0">
+              <TextBlock Classes="label" Text="Pelo bajo el sombrero" />
+              <ComboBox ItemsSource="{x:Static vm:DrawableViewModel.HatHairOptions}" SelectedIndex="{Binding HatHairIndex}" HorizontalAlignment="Stretch"
+                        ToolTip.Tip="Solo afecta a peinados preparados para ello, como los del juego" />
+            </StackPanel>
             <TextBlock Classes="label" Text="{Binding Summary}" Margin="0,12,0,0" />
             <ItemsControl ItemsSource="{Binding Textures}">
               <ItemsControl.ItemTemplate>

@@ -22,7 +22,7 @@ public class ProjectFileTests
                     ModelPath = "models/hoodie.ydd",
                     Textures = [new() { TexturePath = "tex/hoodie_a.ytd" }, new() { TexturePath = "tex/hoodie_b.ytd" }],
                 },
-                new Drawable { Name = "Cap", Prop = PropSlot.Hat, ModelPath = "models/cap.ydd", Flags = { HideHair = true } },
+                new Drawable { Name = "Cap", Prop = PropSlot.Hat, ModelPath = "models/cap.ydd", Flags = { HatHair = HatHair.Remove } },
             ],
             Tattoos = [new Tattoo { Name = "Rose", Zone = TattooZone.LeftArm, TexturePath = "tattoos/rose.ytd" }],
         };
@@ -36,7 +36,8 @@ public class ProjectFileTests
             Assert.Equal(ProjectFile.Serialize(project), ProjectFile.Serialize(loaded));
             Assert.Equal(ComponentSlot.Top, loaded.Drawables[0].Component);
             Assert.True(loaded.Drawables[1].IsProp);
-            Assert.True(loaded.Drawables[1].Flags.HideHair);
+            Assert.Equal(HatHair.Remove, loaded.Drawables[1].Flags.HatHair);
+            Assert.Null(loaded.Drawables[0].Flags.HeelHeight);
             Assert.Contains("\"component\": \"top\"", File.ReadAllText(path));
         }
         finally

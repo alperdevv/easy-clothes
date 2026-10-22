@@ -8,7 +8,8 @@ public sealed record SlotRef(ComponentSlot? Component, PropSlot? Prop)
     public string FileCode => Component is { } c ? PedSlotNames.FileCode(c) : PedSlotNames.FileCode(Prop!.Value);
 }
 
-public sealed record ModelName(PedGender? Gender, SlotRef Slot, int Index);
+// Alternate 1 is the first person model ("jbib_000_u_1.ydd").
+public sealed record ModelName(PedGender? Gender, SlotRef Slot, int Index, int Alternate = 0);
 
 public sealed record TextureName(PedGender? Gender, SlotRef Slot, int Index, int Variation);
 
@@ -26,7 +27,8 @@ public static partial class StreamName
         var (gender, body) = Split(fileName);
         var match = ModelPattern().Match(body);
         if (!match.Success || !SlotsByCode.TryGetValue(match.Groups["code"].Value, out var slot)) return null;
-        return new ModelName(gender, slot, int.Parse(match.Groups["index"].Value));
+        var alternate = match.Groups["alt"].Success ? int.Parse(match.Groups["alt"].Value) : 0;
+        return new ModelName(gender, slot, int.Parse(match.Groups["index"].Value), alternate);
     }
 
     public static TextureName? ParseTexture(string fileName)
@@ -61,7 +63,7 @@ public static partial class StreamName
         return (GenderOf(name[..caret]), name[(caret + 1)..]);
     }
 
-    [GeneratedRegex(@"^(?<code>p_[a-z]+|[a-z]{4})_(?<index>\d{3})(_[a-z])?\.ydd$")]
+    [GeneratedRegex(@"^(?<code>p_[a-z]+|[a-z]{4})_(?<index>\d{3})(_[a-z])?(_(?<alt>\d))?\.ydd$")]
     private static partial Regex ModelPattern();
 
     [GeneratedRegex(@"^(?<code>p_[a-z]+|[a-z]{4})_diff_(?<index>\d{3})_(?<letter>[a-z])(_[a-z]{3})?\.ytd$")]

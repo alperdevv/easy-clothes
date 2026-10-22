@@ -22,6 +22,10 @@ public static class ProjectValidator
                 issues.Add(new(IssueSeverity.Error, $"{d.Name}: falta el modelo {d.ModelPath}.", d.Id));
             else if (cache is not null)
                 AnalyzeModel(issues, d, d.ModelPath, modelFile, cache, limits);
+            if (d.FirstPersonModelPath is { } firstPerson && !File.Exists(Path.Combine(projectDir, firstPerson)))
+                issues.Add(new(IssueSeverity.Error, $"{d.Name}: falta el modelo de primera persona {firstPerson}.", d.Id));
+            if (d.ClothPhysicsPath is { } cloth && !File.Exists(Path.Combine(projectDir, cloth)))
+                issues.Add(new(IssueSeverity.Error, $"{d.Name}: faltan las físicas de tela {cloth}.", d.Id));
             if (d.Textures.Count == 0)
                 issues.Add(new(IssueSeverity.Error, $"{d.Name}: no tiene texturas.", d.Id));
             if (d.Textures.Count > Drawable.MaxTextures)

@@ -53,6 +53,7 @@ public static class ResourceExporter
         var dataFiles = new List<(string Type, string File)>();
         var stream = Directory.CreateDirectory(Path.Combine(dir, "stream")).FullName;
 
+        var firstPerson = new List<string>();
         foreach (var gender in Enum.GetValues<PedGender>())
         {
             var drawables = project.DrawablesFor(gender).ToList();
@@ -60,23 +61,37 @@ public static class ResourceExporter
             var ped = PedSlotNames.PedModel(gender);
             var pedStream = Directory.CreateDirectory(Path.Combine(stream, ped)).FullName;
 
-            var components = new Dictionary<ComponentSlot, IReadOnlyList<int>>();
+            var components = new Dictionary<ComponentSlot, IReadOnlyList<VariationDrawable>>();
             foreach (var slot in drawables.Where(d => d.Component is not null).GroupBy(d => d.Component!.Value))
             {
                 var ordered = ClothingProject.InGameOrder(slot);
                 var code = PedSlotNames.FileCode(slot.Key);
+                var items = new List<VariationDrawable>();
                 for (var i = 0; i < ordered.Count; i++)
                 {
-                    var prefix = $"{ped}_{collection}^{code}";
-                    files += Copy(projectDir, ordered[i].ModelPath, pedStream, $"{prefix}_{i:000}_u.ydd");
-                    for (var t = 0; t < ordered[i].Textures.Count; t++)
-                        files += Copy(projectDir, ordered[i].Textures[t].TexturePath, pedStream, $"{prefix}_diff_{i:000}_{TextureVariation.LetterFor(t)}_uni.ytd");
-                    WarnFirstPerson(warnings, ordered[i]);
+                    var d = ordered[i];
+                    var model = $"{ped}_{collection}^{code}_{i:000}_u";
+                    files += Copy(projectDir, d.ModelPath, pedStream, $"{model}.ydd");
+                    for (var t = 0; t < d.Textures.Count; t++)
+                        files += Copy(projectDir, d.Textures[t].TexturePath, pedStream, $"{ped}_{collection}^{code}_diff_{i:000}_{TextureVariation.LetterFor(t)}_uni.ytd");
+                    if (d.FirstPersonModelPath is not null)
+                    {
+                        files += Copy(projectDir, d.FirstPersonModelPath, pedStream, $"{model}_1.ydd");
+                        firstPerson.Add(model.Replace('^', '/'));
+                    }
+                    if (d.ClothPhysicsPath is not null)
+                        files += Copy(projectDir, d.ClothPhysicsPath, pedStream, $"{model}.yld");
+                    items.Add(new VariationDrawable(d.Textures.Count)
+                    {
+                        FirstPerson = d.FirstPersonModelPath is not null,
+                        Cloth = d.ClothPhysicsPath is not null,
+                        HeelHeight = slot.Key == ComponentSlot.Shoes ? d.Flags.HeelHeight ?? 0 : 0,
+                    });
                 }
-                components[slot.Key] = ordered.Select(d => d.Textures.Count).ToList();
+                components[slot.Key] = items;
             }
 
-            var props = new Dictionary<PropSlot, IReadOnlyList<int>>();
+            var props = new Dictionary<PropSlot, IReadOnlyList<VariationDrawable>>();
             foreach (var slot in drawables.Where(d => d.Prop is not null).GroupBy(d => d.Prop!.Value))
             {
                 var ordered = ClothingProject.InGameOrder(slot);
@@ -86,16 +101,40 @@ public static class ResourceExporter
                     files += Copy(projectDir, ordered[i].ModelPath, pedStream, $"{prefix}_{i:000}.ydd");
                     for (var t = 0; t < ordered[i].Textures.Count; t++)
                         files += Copy(projectDir, ordered[i].Textures[t].TexturePath, pedStream, $"{prefix}_diff_{i:000}_{TextureVariation.LetterFor(t)}.ytd");
-                    WarnFirstPerson(warnings, ordered[i]);
+                    if (ordered[i].FirstPersonModelPath is not null || ordered[i].ClothPhysicsPath is not null)
+                        warnings.Add($"{ordered[i].Name}: los accesorios no admiten modelo de primera persona ni físicas de tela; se exporta sin ellos.");
                 }
-                props[slot.Key] = ordered.Select(d => d.Textures.Count).ToList();
+                props[slot.Key] = ordered.Select(d => new VariationDrawable(d.Textures.Count)
+                {
+                    HairScale = slot.Key == PropSlot.Hat ? HairScale(d.Flags.HatHair) : 0,
+                }).ToList();
             }
 
             PedVariation.Write(collection, components, props).Write(Path.Combine(stream, $"{ped}_{collection}.ymt"));
+            files++;
+
+            var heels = components.GetValueOrDefault(ComponentSlot.Shoes, []).Select((d, i) => (d, i)).Where(x => x.d.HeelHeight > 0).Select(x => x.i).ToList();
+            var hats = props.GetValueOrDefault(PropSlot.Hat, []).Select((d, i) => (d, i)).Where(x => x.d.HairScale != 0).Select(x => x.i).ToList();
+            string? creature = null;
+            if (heels.Count > 0 || hats.Count > 0)
+            {
+                creature = CreatureMetadata.Name(gender, collection);
+                File.WriteAllBytes(Path.Combine(stream, creature + ".ymt"), CreatureMetadata.Write(heels, hats));
+                files++;
+            }
+
             var shopMeta = $"{ped}_{collection}.meta";
-            SaveXml(ShopMeta(ped, collection), Path.Combine(dir, shopMeta));
+            SaveXml(ShopMeta(gender, collection, creature), Path.Combine(dir, shopMeta));
             dataFiles.Add(("SHOP_PED_APPAREL_META_FILE", shopMeta));
-            files += 2;
+            files++;
+        }
+
+        if (firstPerson.Count > 0)
+        {
+            var alternates = $"first_person_alternates_{collection}.meta";
+            SaveXml(FirstPersonAlternates(firstPerson), Path.Combine(dir, alternates));
+            dataFiles.Add(("PED_FIRST_PERSON_ALTERNATE_DATA", alternates));
+            files++;
         }
 
         if (project.Tattoos.Count > 0)
@@ -178,11 +217,12 @@ public static class ResourceExporter
         return 1;
     }
 
-    private static void WarnFirstPerson(List<string> warnings, Drawable d)
+    private static float HairScale(HatHair hair) => hair switch
     {
-        if (d.FirstPersonModelPath is not null)
-            warnings.Add($"{d.Name}: el modelo de primera persona todavía no se exporta.");
-    }
+        HatHair.Cut => -0.5f,
+        HatHair.Remove => -1f,
+        _ => 0f,
+    };
 
     // No BOM: the game's XML parser expects the declaration as the very first bytes.
     private static void SaveXml(XDocument document, string path)
@@ -191,16 +231,25 @@ public static class ResourceExporter
         document.Save(writer);
     }
 
-    private static XDocument ShopMeta(string ped, string collection) => new(
+    private static XDocument ShopMeta(PedGender gender, string collection, string? creatureMetadata) => new(
         new XDeclaration("1.0", "UTF-8", null),
         new XElement("ShopPedApparel",
-            new XElement("pedName", ped),
+            new XElement("pedName", PedSlotNames.PedModel(gender)),
             new XElement("dlcName", collection),
-            new XElement("fullDlcName", $"{ped}_{collection}"),
-            new XElement("eCharacter", "SCR_CHAR_MULTIPLAYER"),
+            new XElement("fullDlcName", $"{PedSlotNames.PedModel(gender)}_{collection}"),
+            new XElement("eCharacter", gender == PedGender.Male ? "SCR_CHAR_MULTIPLAYER" : "SCR_CHAR_MULTIPLAYER_F"),
+            creatureMetadata is null ? null : new XElement("creatureMetaData", creatureMetadata),
             new XElement("pedOutfits"),
             new XElement("pedComponents"),
             new XElement("pedProps")));
+
+    // Asset names are "<ped>_<collection>/<model>"; alternate 1 is the "_1.ydd" streamed next to the model.
+    private static XDocument FirstPersonAlternates(IEnumerable<string> models) => new(
+        new XDeclaration("1.0", "UTF-8", null),
+        new XElement("FirstPersonAlternateData",
+            new XElement("alternates", models.Select(m => new XElement("Item",
+                new XElement("assetName", m),
+                new XElement("alternate", new XAttribute("value", 1)))))));
 
     private static string Manifest(ClothingProject project, IReadOnlyList<(string Type, string File)> dataFiles)
     {

@@ -1,4 +1,6 @@
+using EasyClothes.Core.Analysis;
 using EasyClothes.Core.Model;
+using EasyClothes.Core.Projects;
 
 namespace EasyClothes.Core.Importing;
 
@@ -24,6 +26,12 @@ public static class DrawableImporter
                 warnings.Add($"{Path.GetFileName(modelPath)}: el nombre no sigue el formato <tipo>_000.ydd, no se puede saber a qué hueco pertenece.");
                 continue;
             }
+            if (model.Alternate > 0)
+            {
+                if (!File.Exists(MainModelOf(modelPath)))
+                    warnings.Add($"{Path.GetFileName(modelPath)}: es un modelo de primera persona y no está junto a su prenda; impórtalo desde la carpeta de la prenda.");
+                continue;
+            }
 
             var gender = model.Gender ?? StreamName.GenderFromFolders(modelPath) ?? fallbackGender;
             var textures = FindTextures(texturesByDir, modelPath, model, gender);
@@ -43,6 +51,12 @@ public static class DrawableImporter
                     .Select(t => new TextureVariation { TexturePath = CopyInto(projectDir, targetDir, t) })
                     .ToList(),
             };
+            var firstPerson = Path.Combine(Path.GetDirectoryName(modelPath)!, Path.GetFileNameWithoutExtension(modelPath) + "_1.ydd");
+            if (File.Exists(firstPerson)) drawable.FirstPersonModelPath = CopyInto(projectDir, targetDir, firstPerson);
+            var cloth = Path.ChangeExtension(modelPath, ".yld");
+            if (File.Exists(cloth)) drawable.ClothPhysicsPath = CopyInto(projectDir, targetDir, cloth);
+            if (drawable.Component == ComponentSlot.Shoes) drawable.Flags.HeelHeight = EstimateHeel(modelPath);
+
             if (textures.Count > Drawable.MaxTextures)
                 warnings.Add($"{drawable.Name}: tiene {textures.Count} texturas y el juego admite {Drawable.MaxTextures}; se han ignorado las sobrantes.");
 
@@ -51,6 +65,24 @@ public static class DrawableImporter
         }
 
         return new ImportResult<Drawable>(added, warnings);
+    }
+
+    // Files chosen by hand are stored next to the model with the names the game expects.
+    public static void AttachFirstPerson(string projectDir, Drawable drawable, string source) =>
+        drawable.FirstPersonModelPath = CopyBesideModel(projectDir, drawable, source, "_1.ydd");
+
+    public static void AttachClothPhysics(string projectDir, Drawable drawable, string source) =>
+        drawable.ClothPhysicsPath = CopyBesideModel(projectDir, drawable, source, ".yld");
+
+    private static string CopyBesideModel(string projectDir, Drawable drawable, string source, string suffix)
+    {
+        var relative = Path.Combine(Path.GetDirectoryName(drawable.ModelPath) ?? "", Path.GetFileNameWithoutExtension(drawable.ModelPath) + suffix).Replace('\\', '/');
+        var target = Path.GetFullPath(Path.Combine(projectDir, relative));
+        if (string.Equals(Path.GetFullPath(source), target, StringComparison.OrdinalIgnoreCase)) return relative;
+        if (File.Exists(target)) ProjectBackups.Copy(projectDir, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        File.Copy(source, target, overwrite: true);
+        return relative;
     }
 
     // Folders are searched recursively; a file or folder listed twice is imported once.
@@ -79,6 +111,25 @@ public static class DrawableImporter
             .OrderBy(t => t.Name.Variation)
             .Select(t => t.Path)
             .ToList();
+    }
+
+    private static string MainModelOf(string alternatePath)
+    {
+        var stem = Path.GetFileNameWithoutExtension(alternatePath);
+        return Path.Combine(Path.GetDirectoryName(alternatePath)!, stem[..stem.LastIndexOf('_')] + ".ydd");
+    }
+
+    // An unreadable model is reported by validation; here it only means no heel guess.
+    private static float? EstimateHeel(string modelPath)
+    {
+        try
+        {
+            return HeelEstimator.Estimate(modelPath);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or NotSupportedException or IOException)
+        {
+            return null;
+        }
     }
 
     private static string UniqueDir(string projectDir, string relativeDir)

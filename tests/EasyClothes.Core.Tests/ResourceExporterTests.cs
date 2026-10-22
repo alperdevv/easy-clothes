@@ -3,6 +3,7 @@ using EasyClothes.Core.Export;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Rage;
+using EasyClothes.Core.Rage.Meta;
 using EasyClothes.Core.Textures;
 
 namespace EasyClothes.Core.Tests;
@@ -34,19 +35,73 @@ public sealed class ResourceExporterTests : IDisposable
         Assert.True(File.Exists(Path.Combine(Output, "stream", "mp_f_freemode_01", "mp_f_freemode_01_ropa^lowr_diff_000_a_uni.ytd")));
 
         var variation = PedVariation.Read(ResourceFile.Read(Path.Combine(Output, "stream", "mp_m_freemode_01_ropa.ymt")));
-        Assert.Equal([1, 2], variation.Components[ComponentSlot.Top]);
-        Assert.Equal([3], variation.Props[PropSlot.Hat]);
+        Assert.Equal([1, 2], variation.Components[ComponentSlot.Top].Select(d => d.Textures));
+        Assert.Equal([3], variation.Props[PropSlot.Hat].Select(d => d.Textures));
         Assert.Equal(Jenkins.Hash("ropa"), variation.DlcNameHash);
 
         var shopPath = Path.Combine(Output, "mp_f_freemode_01_ropa.meta");
         Assert.Equal((byte)'<', File.ReadAllBytes(shopPath)[0]);
         var shop = XDocument.Load(shopPath).Root!;
         Assert.Equal("mp_f_freemode_01_ropa", shop.Element("fullDlcName")?.Value);
+        Assert.Equal("SCR_CHAR_MULTIPLAYER_F", shop.Element("eCharacter")?.Value);
         var manifest = File.ReadAllText(Path.Combine(Output, "fxmanifest.lua"));
         Assert.Contains("data_file 'SHOP_PED_APPAREL_META_FILE' 'mp_m_freemode_01_ropa.meta'", manifest);
         Assert.Contains("data_file 'SHOP_PED_APPAREL_META_FILE' 'mp_f_freemode_01_ropa.meta'", manifest);
         Assert.Equal(4, result.Drawables);
         Assert.Empty(Directory.GetDirectories(Path.GetDirectoryName(Output)!, ".*"));
+    }
+
+    [Fact]
+    public void First_person_models_cloth_physics_heels_and_hat_hair_reach_the_game_files()
+    {
+        var hoodie = Item("hoodie", PedGender.Female, ComponentSlot.Top);
+        hoodie.FirstPersonModelPath = Extra("hoodie_fp.ydd");
+        var skirt = Item("skirt", PedGender.Female, ComponentSlot.Legs);
+        skirt.ClothPhysicsPath = Extra("skirt.yld");
+        var flats = Item("flats", PedGender.Female, ComponentSlot.Shoes);
+        var heels = Item("heels", PedGender.Female, ComponentSlot.Shoes);
+        heels.Flags.HeelHeight = 1.3f;
+        var beanie = Item("beanie", PedGender.Female, prop: PropSlot.Hat);
+        beanie.Flags.HatHair = HatHair.Keep;
+        var cap = Item("cap", PedGender.Female, prop: PropSlot.Hat);
+        cap.Flags.HatHair = HatHair.Remove;
+
+        var result = ResourceExporter.Export(Project(hoodie, skirt, flats, heels, beanie, cap), _dir, Output);
+
+        Assert.Empty(result.Warnings);
+        var female = Path.Combine(Output, "stream", "mp_f_freemode_01");
+        Assert.Equal("hoodie_fp.ydd", File.ReadAllText(Path.Combine(female, "mp_f_freemode_01_ropa^jbib_000_u_1.ydd")));
+        Assert.Equal("skirt.yld", File.ReadAllText(Path.Combine(female, "mp_f_freemode_01_ropa^lowr_000_u.yld")));
+
+        var variation = PedVariation.Read(ResourceFile.Read(Path.Combine(Output, "stream", "mp_f_freemode_01_ropa.ymt")));
+        Assert.True(variation.Components[ComponentSlot.Top][0].FirstPerson);
+        Assert.True(variation.Components[ComponentSlot.Legs][0].Cloth);
+        Assert.Equal([0f, 1.3f], variation.Components[ComponentSlot.Shoes].Select(d => d.HeelHeight));
+        Assert.Equal([0f, -1f], variation.Props[PropSlot.Hat].Select(d => d.HairScale));
+
+        var creature = Rbf.Read(File.ReadAllBytes(Path.Combine(Output, "stream", "mp_creaturemetadata_f_ropa.ymt")));
+        var shoe = Assert.Single(creature.Element("pedCompExpressions")!.Elements("Item"));
+        Assert.Equal(("1", "4", "28462"), (shoe.Element("pedCompVarIndex")?.Attribute("value")?.Value, shoe.Element("pedCompExpressionIndex")?.Attribute("value")?.Value, shoe.Element("ids")?.Value));
+        Assert.Equal(["-1", "1"], creature.Element("pedPropExpressions")!.Elements("Item").Select(i => i.Element("pedPropVarIndex")?.Attribute("value")?.Value));
+
+        var shop = XDocument.Load(Path.Combine(Output, "mp_f_freemode_01_ropa.meta")).Root!;
+        Assert.Equal("mp_creaturemetadata_f_ropa", shop.Element("creatureMetaData")?.Value);
+        var alternate = Assert.Single(XDocument.Load(Path.Combine(Output, "first_person_alternates_ropa.meta")).Root!.Element("alternates")!.Elements("Item"));
+        Assert.Equal("mp_f_freemode_01_ropa/jbib_000_u", alternate.Element("assetName")?.Value);
+        Assert.Contains("data_file 'PED_FIRST_PERSON_ALTERNATE_DATA' 'first_person_alternates_ropa.meta'", File.ReadAllText(Path.Combine(Output, "fxmanifest.lua")));
+    }
+
+    [Fact]
+    public void Plain_clothes_need_no_creature_metadata()
+    {
+        var hat = Item("hat", PedGender.Male, prop: PropSlot.Hat);
+        hat.Flags.HatHair = HatHair.Keep;
+
+        ResourceExporter.Export(Project(hat, Item("shoe", PedGender.Male, ComponentSlot.Shoes)), _dir, Output);
+
+        Assert.Empty(Directory.GetFiles(Path.Combine(Output, "stream"), "mp_creaturemetadata_*"));
+        Assert.Null(XDocument.Load(Path.Combine(Output, "mp_m_freemode_01_ropa.meta")).Root!.Element("creatureMetaData"));
+        Assert.False(File.Exists(Path.Combine(Output, "first_person_alternates_ropa.meta")));
     }
 
     [Fact]
@@ -104,6 +159,12 @@ public sealed class ResourceExporterTests : IDisposable
         Assert.Equal("0.250000", item.Element("uvPos")?.Attribute("x")?.Value);
         Assert.Contains("data_file 'PED_OVERLAY_FILE' 'ropa_overlays.xml'", File.ReadAllText(Path.Combine(Output, "fxmanifest.lua")));
         Assert.Contains("ropa_tat_000_F", File.ReadAllText(Path.Combine(Output, "tattoos.json")));
+    }
+
+    private string Extra(string name)
+    {
+        File.WriteAllText(Path.Combine(_dir, name), name);
+        return name;
     }
 
     private static ClothingProject Project(params Drawable[] drawables) =>
