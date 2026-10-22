@@ -28,7 +28,7 @@
         <Button Content="Importar proyecto" Command="{Binding UnpackProjectCommand}" ToolTip.Tip="Abrir un .ecpack en una carpeta nueva" />
         <Rectangle Classes="separator" />
         <Button Content="Importar prendas" Command="{Binding ImportCommand}" ToolTip.Tip="Importar .ydd con sus texturas (Ctrl+I). También puedes arrastrarlos a la ventana." />
-        <Button Content="Importar carpeta" Command="{Binding ImportFolderCommand}" ToolTip.Tip="Importar todas las prendas de una carpeta y sus subcarpetas (Ctrl+Mayús+I)" />
+        <Button Content="Importar carpeta" Command="{Binding ImportFolderCommand}" ToolTip.Tip="Importar todas las prendas de una carpeta y sus subcarpetas (Ctrl+Mayús+I). Si es un recurso ya generado (con su .ymt), cada prenda conserva su número y sus opciones." />
         <Button Content="Importar tatuajes" Command="{Binding ImportTattoosCommand}" ToolTip.Tip="Importar imágenes .png o .ytd como tatuajes" />
         <Button Content="Eliminar" Command="{Binding RemoveCommand}" />
         <Rectangle Classes="separator" />

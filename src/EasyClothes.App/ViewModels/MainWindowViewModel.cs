@@ -480,15 +480,16 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     {
         EnsureProject();
         var fallback = Selected?.Model.Gender ?? PedGender.Male;
+        var wasEmpty = Project!.Drawables.Count == 0;
         // The import runs on a copy so validation and the tree never see the list change under them.
-        var staging = new ClothingProject { Name = Project!.Name, CollectionName = Project.CollectionName, Drawables = [.. Project.Drawables] };
+        var staging = new ClothingProject { Name = Project.Name, CollectionName = Project.CollectionName, Drawables = [.. Project.Drawables] };
         var dir = ProjectDir!;
         IsBusy = true;
         Status = "Importando prendas…";
-        ImportResult<Drawable> result;
+        (List<Drawable> Added, List<string> Warnings, string? Collection) result;
         try
         {
-            result = await Task.Run(() => DrawableImporter.Import(staging, dir, paths, fallback));
+            result = await Task.Run(() => Import(staging, dir, paths, fallback));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -501,10 +502,38 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
 
         Project.Drawables.AddRange(result.Added);
+        if (wasEmpty && result.Collection is { } collection)
+        {
+            Project.CollectionName = collection;
+            OnPropertyChanged(nameof(CollectionName));
+        }
         MarkChanged(rebuildTree: true);
-        Status = $"{result.Added.Count} prenda(s) importada(s)." + WarningsSummary(result.Warnings);
+        Status = $"{result.Added.Count(d => !d.Reserved)} prenda(s) importada(s)." + WarningsSummary(result.Warnings);
         if (result.Added.LastOrDefault() is { } last) Select(last.Id);
         return result.Added;
+    }
+
+    // Folders with a ped .ymt are finished resources and keep their numbers and options.
+    private static (List<Drawable>, List<string>, string?) Import(ClothingProject project, string dir, IReadOnlyList<string> paths, PedGender fallback)
+    {
+        var added = new List<Drawable>();
+        var warnings = new List<string>();
+        string? collection = null;
+        var resources = paths.Where(ResourceImporter.IsResource).ToList();
+        foreach (var resource in resources)
+        {
+            var result = ResourceImporter.Import(project, dir, resource);
+            added.AddRange(result.Added);
+            warnings.AddRange(result.Warnings);
+            collection ??= result.Collection;
+        }
+        if (paths.Except(resources).ToList() is { Count: > 0 } loose)
+        {
+            var result = DrawableImporter.Import(project, dir, loose, fallback);
+            added.AddRange(result.Added);
+            warnings.AddRange(result.Warnings);
+        }
+        return (added, warnings, collection);
     }
 
     [RelayCommand]

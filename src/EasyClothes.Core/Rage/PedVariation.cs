@@ -9,6 +9,7 @@ namespace EasyClothes.Core.Rage;
 public sealed record VariationDrawable(int Textures)
 {
     public bool FirstPerson { get; init; }
+    public bool Skin { get; init; }
     public bool Cloth { get; init; }
     public float HeelHeight { get; init; }
     public float HairScale { get; init; }
@@ -47,9 +48,13 @@ public sealed record PedVariation(
             for (var d = 0; d < items.Count; d++)
             {
                 var textures = new byte[items[d].Textures * 3];
-                for (var t = 0; t < items[d].Textures; t++) textures[t * 3 + 1] = 0xFF;
+                for (var t = 0; t < items[d].Textures; t++)
+                {
+                    textures[t * 3] = (byte)(items[d].Skin ? 1 : 0); // texId: "_whi" instead of "_uni"
+                    textures[t * 3 + 1] = 0xFF;
+                }
                 var item = drawables.AsSpan(d * 0x30, 0x30);
-                item[0] = 1; // propMask: universal ("_u") drawable
+                item[0] = (byte)(items[d].Skin ? 17 : 1); // propMask: skin-toned ("_r") or universal ("_u")
                 item[1] = (byte)(items[d].FirstPerson ? 1 : 0); // alternates: "_1" is the first person model
                 item[0x18] = (byte)(items[d].Cloth ? 1 : 0);
                 MetaBuilder.WriteArray(item[8..], builder.Append(TextureData, textures), items[d].Textures);
@@ -157,6 +162,7 @@ public sealed record PedVariation(
                 items[d] = new VariationDrawable(textures)
                 {
                     FirstPerson = item[1] > 0,
+                    Skin = (item[0] & 0x10) != 0,
                     Cloth = item[0x18] > 0,
                     HeelHeight = heels.GetValueOrDefault((slot, d)),
                 };

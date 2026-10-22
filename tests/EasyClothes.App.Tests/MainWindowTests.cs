@@ -257,6 +257,27 @@ public sealed class MainWindowTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task Dropping_a_finished_resource_keeps_numbers_and_takes_its_collection()
+    {
+        var stream = Directory.CreateDirectory(Path.Combine(_dir, "recurso", "stream")).FullName;
+        EasyClothes.Core.Rage.PedVariation.Write("mp_f_tienda",
+            new Dictionary<ComponentSlot, IReadOnlyList<EasyClothes.Core.Rage.VariationDrawable>> { [ComponentSlot.Legs] = [new(1), new(1)] },
+            new Dictionary<PropSlot, IReadOnlyList<EasyClothes.Core.Rage.VariationDrawable>>())
+            .Write(Path.Combine(stream, "mp_f_freemode_01_mp_f_tienda.ymt"));
+        foreach (var name in new[] { "mp_f_freemode_01_mp_f_tienda^lowr_001_u.ydd", "mp_f_freemode_01_mp_f_tienda^lowr_diff_001_a_uni.ytd" })
+            File.WriteAllText(Path.Combine(stream, name), "");
+        var window = new MainWindow();
+        window.Show();
+        window.ViewModel.DraftsRoot = Path.Combine(_dir, "drafts");
+
+        await window.ViewModel.DropAsync([Path.Combine(_dir, "recurso")]);
+
+        Assert.Equal("tienda", window.ViewModel.CollectionName);
+        Assert.Equal(["000 reservado 1", "001 lowr_001"], TopNodes(window.ViewModel));
+        Assert.StartsWith("1 prenda(s) importada(s).", window.ViewModel.Status);
+    }
+
+    [AvaloniaFact]
     public void Choosing_the_body_folder_persists_and_can_be_turned_off()
     {
         var window = new MainWindow();

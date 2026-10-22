@@ -33,7 +33,8 @@ static int Usage()
     Console.Error.WriteLine("""
         Usage:
           easyclothes new <dir> <name>                 Create an empty project
-          easyclothes import <project> <ydd|dir>...    Import models (folders recursively) with their textures
+          easyclothes import <project> <ydd|dir>...    Import models (folders recursively) with their textures;
+                                                       a folder with a ped .ymt keeps each garment's number and options
           easyclothes validate <project>               List project problems (exit 1 on errors)
           easyclothes build <project> <out-dir>        Generate the FiveM resource (fxmanifest, stream, .ymt, .meta)
           easyclothes pack <project> <file.ecpack>     Zip the project with its assets
@@ -167,10 +168,26 @@ static async Task<int> NewProject(string dir, string name)
 static async Task<int> Import(string projectPath, string[] models)
 {
     var project = await ProjectFile.LoadAsync(projectPath);
-    var result = DrawableImporter.Import(project, Path.GetDirectoryName(Path.GetFullPath(projectPath))!, models, PedGender.Male);
+    var dir = Path.GetDirectoryName(Path.GetFullPath(projectPath))!;
+    // A folder with a ped .ymt is a finished resource: import it keeping numbers and options.
+    var resources = models.Where(ResourceImporter.IsResource).ToList();
+    var added = new List<Drawable>();
+    var warnings = new List<string>();
+    foreach (var resource in resources)
+    {
+        var imported = ResourceImporter.Import(project, dir, resource);
+        added.AddRange(imported.Added);
+        warnings.AddRange(imported.Warnings);
+    }
+    if (models.Except(resources).ToList() is { Count: > 0 } loose)
+    {
+        var imported = DrawableImporter.Import(project, dir, loose, PedGender.Male);
+        added.AddRange(imported.Added);
+        warnings.AddRange(imported.Warnings);
+    }
     await ProjectFile.SaveAsync(project, projectPath);
-    foreach (var d in result.Added) Console.WriteLine($"+ {d.Gender} {d.Name} ({d.Textures.Count} textures)");
-    foreach (var w in result.Warnings) Console.Error.WriteLine($"! {w}");
+    foreach (var d in added) Console.WriteLine(d.Reserved ? $"+ {d.Gender} {d.Name}" : $"+ {d.Gender} {d.Name} ({d.Textures.Count} textures)");
+    foreach (var w in warnings) Console.Error.WriteLine($"! {w}");
     return 0;
 }
 

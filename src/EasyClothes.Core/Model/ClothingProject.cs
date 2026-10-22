@@ -47,6 +47,9 @@ public sealed class Drawable
 
     public string? FirstPersonModelPath { get; set; }
 
+    // "_r" models use the ped's skin tone and pair with "_whi" textures instead of "_u" and "_uni".
+    public bool Skin { get; set; }
+
     // Cloth simulation (.yld) streamed next to the model, e.g. for skirts and capes.
     public string? ClothPhysicsPath { get; set; }
 

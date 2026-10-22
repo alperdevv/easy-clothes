@@ -38,34 +38,42 @@ public static class DrawableImporter
             if (textures.Count == 0)
                 warnings.Add($"{Path.GetFileName(modelPath)}: no se encontraron texturas junto al modelo.");
 
-            var name = $"{model.Slot.FileCode}_{model.Index:D3}";
-            var targetDir = UniqueDir(projectDir, Path.Combine(AssetsFolder, gender.ToString().ToLowerInvariant(), name));
-            var drawable = new Drawable
-            {
-                Name = UniqueName(project, gender, name),
-                Gender = gender,
-                Component = model.Slot.Component,
-                Prop = model.Slot.Prop,
-                ModelPath = CopyInto(projectDir, targetDir, modelPath),
-                Textures = textures.Take(Drawable.MaxTextures)
-                    .Select(t => new TextureVariation { TexturePath = CopyInto(projectDir, targetDir, t) })
-                    .ToList(),
-            };
-            var firstPerson = Path.Combine(Path.GetDirectoryName(modelPath)!, Path.GetFileNameWithoutExtension(modelPath) + "_1.ydd");
-            if (File.Exists(firstPerson)) drawable.FirstPersonModelPath = CopyInto(projectDir, targetDir, firstPerson);
-            var cloth = Path.ChangeExtension(modelPath, ".yld");
-            if (File.Exists(cloth)) drawable.ClothPhysicsPath = CopyInto(projectDir, targetDir, cloth);
-            if (drawable.Component == ComponentSlot.Shoes) drawable.Flags.HeelHeight = EstimateHeel(modelPath);
-
-            if (textures.Count > Drawable.MaxTextures)
-                warnings.Add($"{drawable.Name}: tiene {textures.Count} texturas y el juego admite {Drawable.MaxTextures}; se han ignorado las sobrantes.");
-
+            var drawable = Create(project, projectDir, modelPath, model, gender, textures, warnings);
             DrawableOrder.PlaceAtEnd(project, drawable);
             project.Drawables.Add(drawable);
             added.Add(drawable);
         }
 
         return new ImportResult<Drawable>(added, warnings);
+    }
+
+    // Copies one model with its textures, first person model and cloth physics; the caller adds it to the project.
+    internal static Drawable Create(ClothingProject project, string projectDir, string modelPath, ModelName model, PedGender gender, IReadOnlyList<string> textures, List<string> warnings)
+    {
+        var name = $"{model.Slot.FileCode}_{model.Index:D3}";
+        var targetDir = UniqueDir(projectDir, Path.Combine(AssetsFolder, gender.ToString().ToLowerInvariant(), name));
+        var drawable = new Drawable
+        {
+            Name = UniqueName(project, gender, name),
+            Gender = gender,
+            Component = model.Slot.Component,
+            Prop = model.Slot.Prop,
+            Skin = model.Skin,
+            ModelPath = CopyInto(projectDir, targetDir, modelPath),
+            Textures = textures.Take(Drawable.MaxTextures)
+                .Select(t => new TextureVariation { TexturePath = CopyInto(projectDir, targetDir, t) })
+                .ToList(),
+        };
+        var firstPerson = Path.Combine(Path.GetDirectoryName(modelPath)!, Path.GetFileNameWithoutExtension(modelPath) + "_1.ydd");
+        if (File.Exists(firstPerson)) drawable.FirstPersonModelPath = CopyInto(projectDir, targetDir, firstPerson);
+        var cloth = Path.ChangeExtension(modelPath, ".yld");
+        if (File.Exists(cloth)) drawable.ClothPhysicsPath = CopyInto(projectDir, targetDir, cloth);
+        if (drawable.Component == ComponentSlot.Shoes) drawable.Flags.HeelHeight = EstimateHeel(modelPath);
+
+        if (textures.Count > Drawable.MaxTextures)
+            warnings.Add($"{drawable.Name}: tiene {textures.Count} texturas y el juego admite {Drawable.MaxTextures}; se han ignorado las sobrantes.");
+
+        return drawable;
     }
 
     // Files chosen by hand are stored next to the model with the names the game expects.
@@ -94,7 +102,7 @@ public static class DrawableImporter
             .Select(Path.GetFullPath)
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
-    private static List<string> FindTextures(Dictionary<string, List<(string Path, TextureName Name)>> cache, string modelPath, ModelName model, PedGender gender)
+    internal static List<string> FindTextures(Dictionary<string, List<(string Path, TextureName Name)>> cache, string modelPath, ModelName model, PedGender gender)
     {
         var dir = Path.GetDirectoryName(Path.GetFullPath(modelPath))!;
         if (!cache.TryGetValue(dir, out var textures))

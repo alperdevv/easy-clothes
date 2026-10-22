@@ -75,10 +75,10 @@ public static class ResourceExporter
                         items.Add(new VariationDrawable(1));
                         continue;
                     }
-                    var model = $"{ped}_{collection}^{code}_{i:000}_u";
+                    var model = $"{ped}_{collection}^{code}_{i:000}_{(d.Skin ? "r" : "u")}";
                     files += Copy(projectDir, d.ModelPath, pedStream, $"{model}.ydd");
                     for (var t = 0; t < d.Textures.Count; t++)
-                        files += Copy(projectDir, d.Textures[t].TexturePath, pedStream, $"{ped}_{collection}^{code}_diff_{i:000}_{TextureVariation.LetterFor(t)}_uni.ytd");
+                        files += Copy(projectDir, d.Textures[t].TexturePath, pedStream, $"{ped}_{collection}^{code}_diff_{i:000}_{TextureVariation.LetterFor(t)}_{(d.Skin ? "whi" : "uni")}.ytd");
                     if (d.FirstPersonModelPath is not null)
                     {
                         files += Copy(projectDir, d.FirstPersonModelPath, pedStream, $"{model}_1.ydd");
@@ -88,6 +88,7 @@ public static class ResourceExporter
                         files += Copy(projectDir, d.ClothPhysicsPath, pedStream, $"{model}.yld");
                     items.Add(new VariationDrawable(d.Textures.Count)
                     {
+                        Skin = d.Skin,
                         FirstPerson = d.FirstPersonModelPath is not null,
                         Cloth = d.ClothPhysicsPath is not null,
                         HeelHeight = slot.Key == ComponentSlot.Shoes ? d.Flags.HeelHeight ?? 0 : 0,

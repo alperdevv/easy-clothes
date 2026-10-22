@@ -1,3 +1,4 @@
+using EasyClothes.Core.Importing;
 using EasyClothes.Core.Analysis;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Rage;
@@ -151,6 +152,36 @@ public class SampleFilesTests
             Assert.Equal(source.Blocks.Select(b => b.Type), rewritten.Blocks.Select(b => b.Type));
             for (var i = 0; i < source.Blocks.Count; i++)
                 Assert.True(source.Block(i).TrimEnd((byte)0).SequenceEqual(rewritten.Block(i).TrimEnd((byte)0)), $"{path}: block {i} differs");
+        }
+    }
+
+    [Fact]
+    public void Sample_resource_imports_every_garment_at_its_number()
+    {
+        if (SamplesDir is null) return;
+        var dir = Directory.CreateTempSubdirectory("easyclothes-eup-").FullName;
+        try
+        {
+            var project = new ClothingProject { Name = "EUP", CollectionName = "eup" };
+            var result = ResourceImporter.Import(project, dir, SamplesDir);
+
+            Assert.Equal("eup", result.Collection);
+            Assert.DoesNotContain(result.Warnings, w => w.Contains("no aparecen"));
+            foreach (var path in Samples("*_freemode_01_*.ymt"))
+            {
+                var variation = PedVariation.Read(ResourceFile.Read(path));
+                var gender = Path.GetFileName(path).StartsWith("mp_m") ? PedGender.Male : PedGender.Female;
+                foreach (var (slot, items) in variation.Components)
+                {
+                    var garments = ClothingProject.InGameOrder(project.Drawables.Where(d => d.Gender == gender && d.Component == slot)).ToList();
+                    Assert.Equal(items.Select(i => i.Textures), garments.Select(g => g.Reserved ? 1 : g.Textures.Count));
+                    Assert.All(garments.Where(g => !g.Reserved).Select((g, i) => (g, i)), x => Assert.Contains($"_{x.i:000}_", Path.GetFileName(x.g.ModelPath)));
+                }
+            }
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
         }
     }
 
