@@ -30,7 +30,7 @@
         <Button Content="Importar prendas" Command="{Binding ImportCommand}" ToolTip.Tip="Importar .ydd con sus texturas (Ctrl+I). También puedes arrastrarlos a la ventana." />
         <Button Content="Importar carpeta" Command="{Binding ImportFolderCommand}" ToolTip.Tip="Importar todas las prendas de una carpeta y sus subcarpetas (Ctrl+Mayús+I). Si es un recurso ya generado (con su .ymt), cada prenda conserva su número y sus opciones." />
         <Button Content="Importar tatuajes" Command="{Binding ImportTattoosCommand}" ToolTip.Tip="Importar imágenes .png o .ytd como tatuajes" />
-        <Button Content="Nueva gorra" Command="{Binding NewCapCommand}" ToolTip.Tip="Crear una gorra desde cero: eliges forma y colores y la puedes cambiar cuando quieras" />
+        <Button Content="Nueva gorra" Command="{Binding NewCapCommand}" ToolTip.Tip="Crear desde cero una gorra, bucket, gorro de lana o visera: eliges modelo, forma y colores y lo puedes cambiar cuando quieras" />
         <Button Content="Eliminar" Command="{Binding RemoveCommand}" />
         <Rectangle Classes="separator" />
         <Button Content="Generar recurso" Command="{Binding BuildResourceCommand}" ToolTip.Tip="Crear la carpeta del recurso de FiveM (Ctrl+B)" />

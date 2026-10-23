@@ -12,12 +12,26 @@ namespace EasyClothes.App.ViewModels;
 
 public sealed record CapStyleOption(string Label, CapStyle Value)
 {
+    public string GarmentName => Value switch
+    {
+        CapStyle.Snapback => "Snapback",
+        CapStyle.DadHat => "Dad hat",
+        CapStyle.Trucker => "Trucker",
+        CapStyle.Bucket => "Bucket",
+        CapStyle.Beanie => "Gorro de lana",
+        CapStyle.SunVisor => "Visera",
+        _ => "Gorra",
+    };
+
     public static readonly IReadOnlyList<CapStyleOption> All =
     [
         new("Béisbol", CapStyle.Baseball),
         new("Snapback", CapStyle.Snapback),
         new("Dad hat", CapStyle.DadHat),
         new("Trucker (rejilla detrás)", CapStyle.Trucker),
+        new("Bucket (gorro de pescador)", CapStyle.Bucket),
+        new("Gorro de lana", CapStyle.Beanie),
+        new("Visera sola", CapStyle.SunVisor),
     ];
 
     public static CapStyleOption For(CapStyle style) => All.First(o => o.Value == style);
@@ -56,11 +70,13 @@ public sealed partial class CapDesignerViewModel : ObservableObject
     private readonly Func<PedGender, CapStage> _stageFor;
     private CancellationTokenSource? _pending;
     private bool _loading;
+    private readonly CapKind _kind;
 
     public CapDesignerViewModel(CapDesign design, PedGender gender, bool editing, Func<PedGender, CapStage> stageFor)
     {
         _stageFor = stageFor;
         IsEditing = editing;
+        _kind = design.Kind;
         Gender = GenderOption.For(gender);
         PropertyChanged += OnChanged;
         Load(design.Clamped());
@@ -117,6 +133,40 @@ public sealed partial class CapDesignerViewModel : ObservableObject
     public partial double Rotation { get; set; }
 
     [ObservableProperty]
+    public partial double BrimWidth { get; set; }
+
+    [ObservableProperty]
+    public partial double BrimDroop { get; set; }
+
+    [ObservableProperty]
+    public partial double CuffHeight { get; set; }
+
+    [ObservableProperty]
+    public partial bool Pompom { get; set; }
+
+    // An existing garment keeps its texture layout, so it can only switch between styles that share it.
+    public IReadOnlyList<CapStyleOption> StyleOptions => IsEditing
+        ? CapStyleOption.All.Where(o => new CapDesign { Style = o.Value }.Kind == _kind).ToList()
+        : CapStyleOption.All;
+
+    private CapKind Kind => Design.Kind;
+    public bool HasVisor => Kind is CapKind.Cap or CapKind.SunVisor;
+    public bool HasCrown => Kind != CapKind.SunVisor;
+    public bool IsCap => Kind == CapKind.Cap;
+    public bool IsBucket => Kind == CapKind.Bucket;
+    public bool IsBeanie => Kind == CapKind.Beanie;
+    public bool HasFrontColour => Kind != CapKind.Bucket;
+    public bool HasButtonColour => Kind is CapKind.Cap or CapKind.Beanie;
+    public bool HasStitchColour => Kind != CapKind.Beanie;
+    public double MinCrownHeight => Design.MinCrownHeight;
+
+    public string CrownLabel => Kind switch { CapKind.Beanie => "Gorro", CapKind.SunVisor => "Banda", _ => "Copa" };
+    public string FrontLabel => Kind switch { CapKind.Beanie => "Doblez", CapKind.SunVisor => "Banda (delante)", _ => "Paneles delanteros" };
+    public string VisorLabel => Kind == CapKind.Bucket ? "Ala" : "Visera";
+    public string UnderVisorLabel => Kind == CapKind.Bucket ? "Debajo del ala" : "Debajo de la visera";
+    public string ButtonLabel => Kind == CapKind.Beanie ? "Pompón" : "Botón";
+
+    [ObservableProperty]
     public partial bool Button { get; set; }
 
     [ObservableProperty]
@@ -149,6 +199,10 @@ public sealed partial class CapDesignerViewModel : ObservableObject
         VisorSquare = (float)VisorSquare,
         Rotation = (float)Rotation,
         Style = Style.Value,
+        BrimWidth = (float)BrimWidth,
+        BrimDroop = (float)BrimDroop,
+        CuffHeight = (float)CuffHeight,
+        Pompom = Pompom,
         Button = Button,
         Colours = new CapColours
         {
@@ -181,9 +235,14 @@ public sealed partial class CapDesignerViewModel : ObservableObject
     private void VisorPreset(VisorPresetOption preset) => Load(preset.Apply(Design));
 
     // Picking a style loads its typical shape; the user's rotation and colours stay.
-    partial void OnStyleChanged(CapStyleOption value)
+    partial void OnStyleChanged(CapStyleOption oldValue, CapStyleOption newValue)
     {
-        if (!_loading) Load(Design.WithStyle(value.Value));
+        if (IsNew && Name == (oldValue?.GarmentName ?? "Gorra")) Name = newValue.GarmentName;
+        if (!_loading) Load(Design.WithStyle(newValue.Value));
+        foreach (var name in (string[])[nameof(HasVisor), nameof(HasCrown), nameof(IsCap), nameof(IsBucket), nameof(IsBeanie), nameof(HasFrontColour),
+                     nameof(HasButtonColour), nameof(HasStitchColour), nameof(MinCrownHeight), nameof(CrownLabel), nameof(FrontLabel), nameof(VisorLabel),
+                     nameof(UnderVisorLabel), nameof(ButtonLabel)])
+            OnPropertyChanged(name);
     }
 
     private void Finish(CapDesignerAction action)
@@ -199,6 +258,10 @@ public sealed partial class CapDesignerViewModel : ObservableObject
         VisorWidth = d.VisorWidth;
         VisorSquare = d.VisorSquare;
         Rotation = d.Rotation;
+        BrimWidth = d.BrimWidth;
+        BrimDroop = d.BrimDroop;
+        CuffHeight = d.CuffHeight;
+        Pompom = d.Pompom;
         Size = d.Size;
         CrownHeight = d.CrownHeight;
         CrownShape = d.CrownShape;

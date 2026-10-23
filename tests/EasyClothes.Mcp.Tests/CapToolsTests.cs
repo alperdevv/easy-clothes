@@ -37,5 +37,11 @@ public sealed class CapToolsTests : IDisposable
 
         var error = await Assert.ThrowsAsync<McpException>(() => _caps.UpdateCap(project, "Snapback", "colours", crownColor: "rojo"));
         Assert.Contains("#RRGGBB", error.Message);
+
+        var beanie = await _caps.CreateCap(project, "mujer", "Gorro", style: "gorro", cuffHeightCm: 3, pompom: true);
+        Assert.Equal(("gorro", 3f, true), (beanie.Shape.Style, beanie.Shape.CuffHeightCm, beanie.Shape.Pompom));
+        Assert.Contains("doblez", beanie.TextureLayout);
+        var mismatch = await Assert.ThrowsAsync<McpException>(() => _caps.UpdateCap(project, "Gorro", "shape", style: "bucket"));
+        Assert.Contains("create_cap", mismatch.Message);
     }
 }

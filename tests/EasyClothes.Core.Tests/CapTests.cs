@@ -113,5 +113,48 @@ public sealed class CapTests : IDisposable
         Assert.Equal(Dark(plain, 100, 150), Dark(trucker, 100, 150), 2);
     }
 
+    [Theory]
+    [InlineData(CapStyle.Baseball)]
+    [InlineData(CapStyle.Trucker)]
+    [InlineData(CapStyle.Bucket)]
+    [InlineData(CapStyle.Beanie)]
+    [InlineData(CapStyle.SunVisor)]
+    public void Every_style_builds_paints_and_stays_off_the_skull_at_its_tightest(CapStyle style)
+    {
+        var design = new CapDesign().WithStyle(style) with { Size = 0, CrownHeight = 0, CrownShape = 0, Pompom = true };
+
+        var mesh = CapModel.Build(design);
+        var diffuse = CapTextures.Diffuse(design, 128);
+
+        Assert.All(mesh.TexCoords, v => Assert.InRange(v, 0, 1));
+        // The freemode skull, roughly: no vertex of the hat may sit inside it.
+        var centre = new System.Numerics.Vector3(0.075f, 0.016f, 0);
+        var radii = new System.Numerics.Vector3(0.099f, 0.101f, 0.09f);
+        for (var v = 0; v < mesh.VertexCount; v++)
+        {
+            var p = new System.Numerics.Vector3(mesh.Positions[v * 3], mesh.Positions[v * 3 + 1], mesh.Positions[v * 3 + 2]);
+            Assert.True(((p - centre) / radii).Length() >= 1, $"vertex {v} at {p} is inside the head");
+        }
+        Assert.True(diffuse.Pixels.Distinct().Count() > 20);
+    }
+
+    [Fact]
+    public void Beanie_cuff_and_pompom_take_their_colours()
+    {
+        var design = new CapDesign { Colours = new CapColours { Crown = 0x000000, Front = 0xFF0000, Button = 0x00FF00 } }.WithStyle(CapStyle.Beanie) with { Pompom = true };
+        var layout = CapLayout.For(CapKind.Beanie);
+        var image = CapTextures.Diffuse(design, 256);
+
+        (int R, int G, int B) At(UvRect r)
+        {
+            var (x, y) = ((int)((r.U0 + r.U1) / 2 * 256), (int)((r.V0 + r.V1) / 2 * 256));
+            var o = (y * 256 + x) * 4;
+            return (image.Pixels[o], image.Pixels[o + 1], image.Pixels[o + 2]);
+        }
+        Assert.True(At(layout.Visor).R > 150 && At(layout.Visor).G < 60);
+        Assert.True(At(layout.Extra).G > 120 && At(layout.Extra).R < 80);
+        Assert.True(At(layout.Crown).R < 40);
+    }
+
     private static float Length(float[] v, int i) => MathF.Sqrt(v[i * 3] * v[i * 3] + v[i * 3 + 1] * v[i * 3 + 1] + v[i * 3 + 2] * v[i * 3 + 2]);
 }
