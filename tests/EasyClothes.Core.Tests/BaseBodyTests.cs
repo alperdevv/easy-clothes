@@ -1,3 +1,4 @@
+using System.Numerics;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Rage;
 using EasyClothes.Core.Settings;
@@ -27,6 +28,26 @@ public sealed class BaseBodyTests : IDisposable
         Assert.Equal([ComponentSlot.Head, ComponentSlot.Torso, ComponentSlot.Shoes], parts.Select(p => p.Slot));
         Assert.EndsWith("feet_diff_001_a_uni.ytd", parts[2].TexturePath);
         Assert.Empty(BaseBody.Parts(_dir, PedGender.Female, null));
+    }
+
+    [Fact]
+    public void Props_hang_from_their_bone_in_the_ped_skeleton()
+    {
+        var male = Directory.CreateDirectory(Path.Combine(_dir, "mp_m_freemode_01")).FullName;
+        File.WriteAllBytes(Path.Combine(male, "head_000_r.ydd"), []);
+        TestResources.WriteSkeleton(Path.Combine(_dir, "mp_m_freemode_01.yft"),
+            ("SKEL_ROOT", 0, -1, new Vector3(0, 0, 1)),
+            ("SKEL_Neck_1", 39317, 0, new Vector3(0, 0, 0.5f)),
+            ("SKEL_Head", Skeleton.HeadTag, 1, new Vector3(0, 0.01f, 0.1f)));
+
+        var hat = BaseBody.Fit(_dir, PedGender.Male, null, PropSlot.Hat);
+        var top = BaseBody.Fit(_dir, PedGender.Male, ComponentSlot.Top, null);
+
+        Assert.Equal(new Vector3(0, 0.01f, 1.6f), hat.Anchor!.Value.Translation);
+        Assert.Equal([ComponentSlot.Head], hat.Parts.Select(p => p.Slot));
+        Assert.Null(top.Anchor);
+        Assert.Same(BodyFit.None, BaseBody.Fit(_dir, PedGender.Male, null, PropSlot.Watch));
+        Assert.Same(BodyFit.None, BaseBody.Fit(_dir, PedGender.Female, null, PropSlot.Hat));
     }
 
     [Fact]

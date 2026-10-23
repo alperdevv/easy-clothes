@@ -1,8 +1,17 @@
+using System.Collections.Concurrent;
+using System.Numerics;
 using EasyClothes.Core.Model;
+using EasyClothes.Core.Rage;
 
 namespace EasyClothes.Core.Viewing;
 
 public sealed record BodyPart(ComponentSlot Slot, string ModelPath, string? TexturePath);
+
+// The mannequin around a garment; props also carry the bone transform that places them on it.
+public sealed record BodyFit(IReadOnlyList<BodyPart> Parts, Matrix4x4? Anchor)
+{
+    public static readonly BodyFit None = new([], null);
+}
 
 // The freemode body, exported from the game by the user (game files are never shipped).
 // Expects the folder that holds mp_m_freemode_01/ and mp_f_freemode_01/ with their .ydd and .ytd files.
@@ -44,5 +53,40 @@ public static class BaseBody
             parts.Add(new BodyPart(slot, model, texture));
         }
         return parts;
+    }
+
+    public static BodyFit Fit(string root, PedGender gender, ComponentSlot? component, PropSlot? prop)
+    {
+        if (component is { } slot) return new BodyFit(Parts(root, gender, slot), null);
+        return prop is { } p && PropAnchor(root, gender, p) is { } anchor ? new BodyFit(Parts(root, gender, null), anchor) : BodyFit.None;
+    }
+
+    // Bone each prop slot hangs from (checked against real packs); prop models are authored in that bone's space.
+    private static readonly Dictionary<PropSlot, ushort> Anchors = new()
+    {
+        [PropSlot.Hat] = Skeleton.HeadTag,
+        [PropSlot.Glasses] = Skeleton.HeadTag,
+        [PropSlot.Ears] = Skeleton.HeadTag,
+        [PropSlot.Watch] = 61007,
+        [PropSlot.Bracelet] = 43810,
+    };
+
+    private static readonly ConcurrentDictionary<string, IReadOnlyList<Bone>> Skeletons = new();
+
+    // Bone space to body space for a prop, or null without the exported ped skeleton (.yft).
+    public static Matrix4x4? PropAnchor(string root, PedGender gender, PropSlot slot)
+    {
+        var path = Path.Combine(root, PedSlotNames.PedModel(gender) + ".yft");
+        if (!File.Exists(path)) return null;
+        try
+        {
+            var bones = Skeletons.GetOrAdd(path, p => Skeleton.ReadFragment(ResourceFile.Read(p)));
+            return bones.FirstOrDefault(b => b.Tag == Anchors[slot])?.World;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            // Without a readable skeleton the prop is simply shown on its own.
+            return null;
+        }
     }
 }

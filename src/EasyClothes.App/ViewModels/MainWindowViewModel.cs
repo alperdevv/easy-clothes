@@ -801,7 +801,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         var body = BodyFor(Selected.Model);
         try
         {
-            var preview = await Task.Run(() => Preview.Load(modelPath, texturePath) with { Body = LoadBody(body) });
+            var preview = await Task.Run(() => Preview.Load(modelPath, texturePath, body.Anchor) with { Body = LoadBody(body.Parts) });
             if (version == _previewVersion) Preview = preview;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
@@ -810,9 +810,8 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
     }
 
-    // Props sit on a bone rather than in body space, so they are shown alone until the skeleton is read.
-    private IReadOnlyList<BodyPart> BodyFor(Drawable drawable) =>
-        ShowBody && drawable.Component is { } slot ? BaseBody.Parts(Settings.BaseBodyFolder!, drawable.Gender, slot) : [];
+    private BodyFit BodyFor(Drawable drawable) =>
+        ShowBody ? BaseBody.Fit(Settings.BaseBodyFolder!, drawable.Gender, drawable.Component, drawable.Prop) : BodyFit.None;
 
     private IReadOnlyList<RenderItem> LoadBody(IReadOnlyList<BodyPart> parts)
     {

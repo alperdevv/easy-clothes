@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Numerics;
 
 namespace EasyClothes.Core.Rage;
 
@@ -11,6 +12,21 @@ public sealed class MeshData
 
     public int VertexCount => Positions.Length / 3;
     public int TriangleCount => Indices.Length / 3;
+
+    public MeshData Transformed(Matrix4x4 transform)
+    {
+        var positions = new float[Positions.Length];
+        var normals = new float[Normals.Length];
+        for (var i = 0; i < Positions.Length; i += 3)
+        {
+            var p = Vector3.Transform(new Vector3(Positions[i], Positions[i + 1], Positions[i + 2]), transform);
+            var n = Vector3.TransformNormal(new Vector3(Normals[i], Normals[i + 1], Normals[i + 2]), transform);
+            if (n != Vector3.Zero) n = Vector3.Normalize(n);
+            p.CopyTo(positions, i);
+            n.CopyTo(normals, i);
+        }
+        return new MeshData { Positions = positions, Normals = normals, TexCoords = TexCoords, Indices = Indices };
+    }
 
     // OpenGL ES (ANGLE on Windows) has no polygon mode, so wireframe is drawn as a line list.
     public ushort[] WireframeIndices()

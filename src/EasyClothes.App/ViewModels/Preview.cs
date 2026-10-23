@@ -1,3 +1,4 @@
+using System.Numerics;
 using EasyClothes.Core.Rage;
 using EasyClothes.Core.Textures;
 using EasyClothes.Core.Viewing;
@@ -8,14 +9,14 @@ public sealed record Preview(IReadOnlyList<MeshData> Meshes, RgbaImage? Texture,
 {
     public IReadOnlyList<RenderItem> Body { get; init; } = [];
 
-    public static Preview Load(string modelPath, string? texturePath)
+    public static Preview Load(string modelPath, string? texturePath, Matrix4x4? transform = null)
     {
         var drawables = DrawableDictionary.Read(ResourceFile.Read(modelPath), includeMeshes: true);
         if (drawables.Count == 0 || drawables[0].Lods.Count == 0)
             return new Preview([], null, "El modelo no contiene geometría.");
 
         var lod = drawables[0].Lods[0];
-        var meshes = lod.Models.SelectMany(m => m).Select(g => g.Mesh!).ToList();
+        var meshes = lod.Models.SelectMany(m => m).Select(g => transform is { } t ? g.Mesh!.Transformed(t) : g.Mesh!).ToList();
         var status = $"{lod.Vertices:N0} vértices · {lod.Triangles:N0} triángulos";
 
         RgbaImage? texture = null;

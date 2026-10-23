@@ -18,6 +18,18 @@ public class ViewingTests
     }
 
     [Fact]
+    public void Transformed_mesh_moves_positions_and_turns_normals()
+    {
+        var mesh = new MeshData { Positions = [1, 0, 0], Normals = [1, 0, 0], TexCoords = [0, 0], Indices = [] };
+
+        var moved = mesh.Transformed(Matrix4x4.CreateRotationZ(MathF.PI / 2) * Matrix4x4.CreateTranslation(0, 0, 2));
+
+        Assert.Equal([0, 1, 2], moved.Positions.Select(v => MathF.Round(v, 5)));
+        Assert.Equal([0, 1, 0], moved.Normals.Select(v => MathF.Round(v, 5)));
+        Assert.Equal([1, 0, 0], mesh.Positions);
+    }
+
+    [Fact]
     public void Camera_starts_in_front_of_the_target_looking_along_y()
     {
         var camera = new OrbitCamera { Target = new Vector3(0, 0, 1), Distance = 3 };

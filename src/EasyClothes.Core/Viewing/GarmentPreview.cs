@@ -1,3 +1,4 @@
+using System.Numerics;
 using EasyClothes.Core.Rage;
 using EasyClothes.Core.Textures;
 
@@ -6,12 +7,12 @@ namespace EasyClothes.Core.Viewing;
 // Loads garments for display and renders them on the CPU, for the app's preview and for tools without a GPU.
 public static class GarmentPreview
 {
-    public static RenderItem LoadPart(string modelPath, string? texturePath)
+    public static RenderItem LoadPart(string modelPath, string? texturePath, Matrix4x4? transform = null)
     {
         var drawables = DrawableDictionary.Read(ResourceFile.Read(modelPath), includeMeshes: true);
         var meshes = drawables.Count == 0 || drawables[0].Lods.Count == 0
             ? []
-            : drawables[0].Lods[0].Models.SelectMany(m => m).Select(g => g.Mesh!).ToList();
+            : drawables[0].Lods[0].Models.SelectMany(m => m).Select(g => transform is { } t ? g.Mesh!.Transformed(t) : g.Mesh!).ToList();
         return new RenderItem(meshes, texturePath is null ? null : LoadTexture(texturePath, out _));
     }
 

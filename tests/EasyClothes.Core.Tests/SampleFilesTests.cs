@@ -3,6 +3,7 @@ using EasyClothes.Core.Analysis;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Rage;
 using EasyClothes.Core.Rage.Meta;
+using EasyClothes.Core.Viewing;
 
 namespace EasyClothes.Core.Tests;
 
@@ -206,6 +207,21 @@ public class SampleFilesTests
 
         Assert.Equal(1.0f, HeelEstimator.Estimate(Path.Combine(female, "feet_000_r.ydd")));
         Assert.Null(HeelEstimator.Estimate(Path.Combine(female, "feet_001_u.ydd")));
+    }
+
+    [Fact]
+    public void Ped_skeleton_places_the_head_above_the_shoulders()
+    {
+        if (Environment.GetEnvironmentVariable("EASYCLOTHES_BODY") is not { } body) return;
+
+        foreach (var gender in Enum.GetValues<PedGender>())
+        {
+            var bones = Skeleton.ReadFragment(ResourceFile.Read(Path.Combine(body, PedSlotNames.PedModel(gender) + ".yft")));
+            var head = Assert.Single(bones, b => b.Tag == Skeleton.HeadTag);
+            Assert.Equal("SKEL_Head", head.Name);
+            Assert.InRange(head.World.Translation.Z, 0.55f, 0.7f);
+            Assert.NotNull(BaseBody.Fit(body, gender, null, PropSlot.Watch).Anchor);
+        }
     }
 
     private static IEnumerable<string> Samples(string pattern) =>

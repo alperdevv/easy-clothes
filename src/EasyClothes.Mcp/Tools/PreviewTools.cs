@@ -38,16 +38,16 @@ public sealed class PreviewTools(Workspace workspace)
         if (yaws.Count is 0 or > 6) throw new McpException("Indica entre 1 y 6 vistas.");
         size = Math.Clamp(size, 256, 1024);
 
-        var body = withBody && d.Component is { } slot && workspace.Options.BodyFolder is { } folder && BaseBody.ResolveRoot(folder) is { } root
-            ? BaseBody.Parts(root, d.Gender, slot)
-            : [];
+        var body = withBody && workspace.Options.BodyFolder is { } folder && BaseBody.ResolveRoot(folder) is { } root
+            ? BaseBody.Fit(root, d.Gender, d.Component, d.Prop)
+            : BodyFit.None;
         var png = await Task.Run(() =>
         {
             try
             {
-                var item = GarmentPreview.LoadPart(Path.Combine(loaded.Dir, d.ModelPath), textureFile);
+                var item = GarmentPreview.LoadPart(Path.Combine(loaded.Dir, d.ModelPath), textureFile, body.Anchor);
                 if (item.Meshes.Count == 0) throw new McpException($"El modelo de {d.Name} no tiene geometría.");
-                var parts = body.Select(p => GarmentPreview.LoadPart(p.ModelPath, p.TexturePath)).ToList();
+                var parts = body.Parts.Select(p => GarmentPreview.LoadPart(p.ModelPath, p.TexturePath)).ToList();
                 return Png(GarmentPreview.RenderViews(item, parts, yaws, size * 2 / 3, size));
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
@@ -56,8 +56,8 @@ public sealed class PreviewTools(Workspace workspace)
             }
         }, ct);
 
-        var bodyNote = body.Count > 0 ? "sobre el personaje base"
-            : d.IsProp ? "los accesorios se muestran sin personaje"
+        var bodyNote = body.Parts.Count > 0 ? "sobre el personaje base"
+            : d.IsProp && workspace.Options.BodyFolder is not null ? "sin personaje: falta el esqueleto (.yft) del personaje para colocar el accesorio"
             : workspace.Options.BodyFolder is null ? "sin personaje: configura la carpeta del personaje en la app o arranca el servidor con --body" : "sin personaje";
         return
         [
