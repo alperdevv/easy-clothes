@@ -28,9 +28,9 @@ public sealed class CapToolsTests : IDisposable
         Assert.Equal(("Snapback", "mujer", "p_head", 1), (created.Garment.Name, created.Garment.Gender, created.Garment.SlotCode, created.Garment.Textures));
         Assert.Equal(("#FFFFFF", "#1E1F24"), (created.Colours.Front, created.Colours.Crown));
 
-        var reshaped = await _caps.UpdateCap(project, "Snapback", "shape", backwards: true);
-        Assert.True(reshaped.Shape.Backwards);
-        Assert.Equal(6, reshaped.Shape.VisorLengthCm);
+        var reshaped = await _caps.UpdateCap(project, "Snapback", "shape", style: "trucker", rotation: 90);
+        Assert.Equal(("trucker", 90f), (reshaped.Shape.Style, reshaped.Shape.Rotation));
+        Assert.Equal(7, reshaped.Shape.VisorLengthCm);
 
         var recoloured = await _caps.UpdateCap(project, "Snapback", "colours", crownColor: "#AA0000");
         Assert.Equal((2, "#AA0000", "#FFFFFF"), (recoloured.Garment.Textures, recoloured.Colours.Crown, recoloured.Colours.Front));

@@ -10,6 +10,32 @@ using EasyClothes.Core.Viewing;
 
 namespace EasyClothes.App.ViewModels;
 
+public sealed record CapStyleOption(string Label, CapStyle Value)
+{
+    public static readonly IReadOnlyList<CapStyleOption> All =
+    [
+        new("Béisbol", CapStyle.Baseball),
+        new("Snapback", CapStyle.Snapback),
+        new("Dad hat", CapStyle.DadHat),
+        new("Trucker (rejilla detrás)", CapStyle.Trucker),
+    ];
+
+    public static CapStyleOption For(CapStyle style) => All.First(o => o.Value == style);
+}
+
+// Quick starting points for the visor; the sliders fine-tune from there.
+public sealed record VisorPresetOption(string Label, Func<CapDesign, CapDesign> Apply)
+{
+    public static readonly IReadOnlyList<VisorPresetOption> All =
+    [
+        new("Curva", d => d with { VisorLength = 7, VisorCurve = 0.7f, VisorAngle = 8, VisorWidth = 0.5f, VisorSquare = 0 }),
+        new("Plana", d => d with { VisorLength = 7.5f, VisorCurve = 0.05f, VisorAngle = 3, VisorWidth = 0.6f, VisorSquare = 0.6f }),
+        new("Corta", d => d with { VisorLength = 4.5f, VisorCurve = 0.5f, VisorAngle = 10, VisorWidth = 0.45f, VisorSquare = 0.1f }),
+        new("Larga", d => d with { VisorLength = 9.5f, VisorCurve = 0.6f, VisorAngle = 10, VisorWidth = 0.55f, VisorSquare = 0.1f }),
+        new("Ancha", d => d with { VisorLength = 7, VisorCurve = 0.4f, VisorAngle = 6, VisorWidth = 1, VisorSquare = 0.4f }),
+    ];
+}
+
 public enum CapDesignerAction
 {
     None,
@@ -29,15 +55,15 @@ public sealed partial class CapDesignerViewModel : ObservableObject
 
     private readonly Func<PedGender, CapStage> _stageFor;
     private CancellationTokenSource? _pending;
+    private bool _loading;
 
     public CapDesignerViewModel(CapDesign design, PedGender gender, bool editing, Func<PedGender, CapStage> stageFor)
     {
         _stageFor = stageFor;
         IsEditing = editing;
         Gender = GenderOption.For(gender);
-        Load(design.Clamped());
         PropertyChanged += OnChanged;
-        SchedulePreview();
+        Load(design.Clamped());
     }
 
     public bool IsEditing { get; }
@@ -79,7 +105,16 @@ public sealed partial class CapDesignerViewModel : ObservableObject
     public partial double VisorAngle { get; set; }
 
     [ObservableProperty]
-    public partial bool Backwards { get; set; }
+    public partial CapStyleOption Style { get; set; }
+
+    [ObservableProperty]
+    public partial double VisorWidth { get; set; }
+
+    [ObservableProperty]
+    public partial double VisorSquare { get; set; }
+
+    [ObservableProperty]
+    public partial double Rotation { get; set; }
 
     [ObservableProperty]
     public partial bool Button { get; set; }
@@ -110,7 +145,10 @@ public sealed partial class CapDesignerViewModel : ObservableObject
         VisorLength = (float)VisorLength,
         VisorCurve = (float)VisorCurve,
         VisorAngle = (float)VisorAngle,
-        Backwards = Backwards,
+        VisorWidth = (float)VisorWidth,
+        VisorSquare = (float)VisorSquare,
+        Rotation = (float)Rotation,
+        Style = Style.Value,
         Button = Button,
         Colours = new CapColours
         {
@@ -133,10 +171,19 @@ public sealed partial class CapDesignerViewModel : ObservableObject
     private void AddColours() => Finish(CapDesignerAction.AddColours);
 
     [RelayCommand]
-    private void ResetShape()
+    private void ResetShape() => Load(Design.WithStyle(Style.Value));
+
+    // 0 front, 90 the wearer's left, -90 right, 180 back.
+    [RelayCommand]
+    private void Turn(string degrees) => Rotation = double.Parse(degrees, System.Globalization.CultureInfo.InvariantCulture);
+
+    [RelayCommand]
+    private void VisorPreset(VisorPresetOption preset) => Load(preset.Apply(Design));
+
+    // Picking a style loads its typical shape; the user's rotation and colours stay.
+    partial void OnStyleChanged(CapStyleOption value)
     {
-        var colours = Design.Colours;
-        Load(new CapDesign { Colours = colours });
+        if (!_loading) Load(Design.WithStyle(value.Value));
     }
 
     private void Finish(CapDesignerAction action)
@@ -147,13 +194,17 @@ public sealed partial class CapDesignerViewModel : ObservableObject
 
     private void Load(CapDesign d)
     {
+        _loading = true;
+        Style = CapStyleOption.For(d.Style);
+        VisorWidth = d.VisorWidth;
+        VisorSquare = d.VisorSquare;
+        Rotation = d.Rotation;
         Size = d.Size;
         CrownHeight = d.CrownHeight;
         CrownShape = d.CrownShape;
         VisorLength = d.VisorLength;
         VisorCurve = d.VisorCurve;
         VisorAngle = d.VisorAngle;
-        Backwards = d.Backwards;
         Button = d.Button;
         CrownColor = Colour(d.Colours.Crown);
         FrontColor = Colour(d.Colours.Front);
@@ -161,11 +212,13 @@ public sealed partial class CapDesignerViewModel : ObservableObject
         UnderVisorColor = Colour(d.Colours.UnderVisor);
         ButtonColor = Colour(d.Colours.Button);
         StitchColor = Colour(d.Colours.Stitch);
+        _loading = false;
+        SchedulePreview();
     }
 
     private void OnChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(Name) or nameof(PreviewError)) return;
+        if (_loading || e.PropertyName is nameof(Name) or nameof(PreviewError)) return;
         SchedulePreview();
     }
 

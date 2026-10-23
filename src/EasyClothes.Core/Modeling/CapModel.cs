@@ -8,8 +8,9 @@ public readonly record struct UvRect(float U0, float V0, float U1, float V1)
     public Vector2 At(float u, float v) => new(U0 + u * (U1 - U0), V0 + v * (V1 - V0));
 }
 
-// Builds the cap mesh in head-bone space (+X up, +Y towards the face, Z sideways), fitted to the
-// freemode head. Shapes are worked out in a cap frame (forward, side, up) and placed at the end.
+// Builds the cap mesh in head-bone space (+X up, +Y towards the face, +Z to the wearer's left), fitted
+// to the freemode head. Shapes are worked out in a head frame (forward, left, up) and placed at the end.
+// Turning the cap moves its panels and visor round the head; the crown keeps the head's shape, like fabric.
 public static class CapModel
 {
     // Fixed texture layout, so painted textures survive any change of shape.
@@ -29,7 +30,6 @@ public static class CapModel
     private const float TiltDegrees = 18;
     private const float Thickness = 0.003f;
     private const float VisorThickness = 0.004f;
-    private const float VisorHalfAngle = 60 * MathF.PI / 180;
 
     private const int Around = 48;
     private const int Rings = 14;
@@ -60,25 +60,28 @@ public static class CapModel
         return mesh.ToMesh(shape.ToBone);
     }
 
-    // The visor's top surface as a grid of (cap-frame position, distance across the visor 0..1, angle).
-    internal static (Vector3[,] Points, float[,] Across, float[,] Angle) VisorGrid(CapDesign design)
+    // The visor's top surface as a grid of (head-frame position, cap-frame position for UVs,
+    // distance across the visor 0..1, angle along it).
+    internal static (Vector3[,] Points, Vector3[,] Flat, float[,] Across, float[,] Angle) VisorGrid(CapDesign design)
     {
         var shape = new Shape(design.Clamped());
         var points = new Vector3[VisorColumns + 1, VisorRows + 1];
+        var flat = new Vector3[VisorColumns + 1, VisorRows + 1];
         var across = new float[VisorColumns + 1, VisorRows + 1];
         var angle = new float[VisorColumns + 1, VisorRows + 1];
         for (var i = 0; i <= VisorColumns; i++)
         {
-            var phi = -VisorHalfAngle + 2 * VisorHalfAngle * i / VisorColumns;
+            var phi = -shape.VisorHalfAngle + 2 * shape.VisorHalfAngle * i / VisorColumns;
             for (var k = 0; k <= VisorRows; k++)
             {
                 var s = (float)k / VisorRows;
                 points[i, k] = shape.VisorPoint(phi, s);
+                flat[i, k] = shape.ToCapFrame(points[i, k]);
                 across[i, k] = s;
                 angle[i, k] = phi;
             }
         }
-        return (points, across, angle);
+        return (points, flat, across, angle);
     }
 
     // Maps a visor-top point (cap frame) into the visor rectangles: front edge at the top.
@@ -89,9 +92,9 @@ public static class CapModel
         return rect.At(side, (extent.Front - p.X) / (extent.Front - extent.Back));
     }
 
-    internal static (float Side, float Back, float Front) VisorExtent(Vector3[,] points)
+    internal static (float Side, float Back, float Front) VisorExtent(Vector3[,] flat)
     {
-        var all = points.Cast<Vector3>().ToList();
+        var all = flat.Cast<Vector3>().ToList();
         return (all.Max(p => MathF.Abs(p.Y)), all.Min(p => p.X), all.Max(p => p.X));
     }
 
@@ -121,8 +124,8 @@ public static class CapModel
 
     private static void Visor(MeshBuilder mesh, Shape shape)
     {
-        var (points, _, _) = VisorGrid(shape.Design);
-        var extent = VisorExtent(points);
+        var (points, flat, _, _) = VisorGrid(shape.Design);
+        var extent = VisorExtent(flat);
         var down = new Vector3(0, 0, -VisorThickness);
         var top = mesh.NewPart();
         var under = mesh.NewPart();
@@ -134,8 +137,8 @@ public static class CapModel
             for (var k = 0; k <= VisorRows; k++)
             {
                 var p = points[i, k];
-                topIds[i, k] = mesh.Add(top, p, VisorUv(VisorTop, p, extent, mirror: false));
-                underIds[i, k] = mesh.Add(under, p + down, VisorUv(VisorUnder, p, extent, mirror: true));
+                topIds[i, k] = mesh.Add(top, p, VisorUv(VisorTop, flat[i, k], extent, mirror: false));
+                underIds[i, k] = mesh.Add(under, p + down, VisorUv(VisorUnder, flat[i, k], extent, mirror: true));
             }
         }
         for (var i = 0; i < VisorColumns; i++)
@@ -185,40 +188,46 @@ public static class CapModel
     private sealed class Shape(CapDesign design)
     {
         public CapDesign Design { get; } = design;
+        public float VisorHalfAngle { get; } = (48 + 24 * design.VisorWidth) * MathF.PI / 180;
         private readonly float _a = HalfLength * design.Size;
         private readonly float _b = HalfWidth * design.Size;
         private readonly float _h = design.CrownHeight / 100 * design.Size;
         private readonly float _fullness = 1 - 0.55f * design.CrownShape;
-        // Worn backwards the cap's own front sits low at the back of the head, so the tilt flips.
-        private readonly float _tilt = (design.Backwards ? -1 : 1) * TiltDegrees * MathF.PI / 180;
+        private readonly float _turn = design.Rotation * MathF.PI / 180;
+        private readonly float _tilt = MathF.Tan(TiltDegrees * MathF.PI / 180);
+        private readonly float _taper = 0.5f - 0.38f * design.VisorSquare;
 
-        // Cap frame: X forward, Y sideways, Z up, relative to the centre of the band. The band is
-        // tilted (front higher) and the tilt fades towards the top, so the crown stays upright.
+        // phi is measured round the cap from its front. The band is tilted (forehead higher) and the
+        // tilt fades towards the top, so the crown stays upright.
         public Vector3 CrownPoint(float phi, float theta, float inset)
         {
             var spread = MathF.Pow(MathF.Max(0, MathF.Cos(theta)), _fullness);
-            var forward = (_a - inset) * spread * MathF.Cos(phi);
-            var up = (_h - inset) * MathF.Sin(theta) + MathF.Tan(_tilt) * forward * (1 - MathF.Sin(theta));
-            return new Vector3(forward, (_b - inset) * spread * MathF.Sin(phi), up);
+            var forward = (_a - inset) * spread * MathF.Cos(phi + _turn);
+            var up = (_h - inset) * MathF.Sin(theta) + _tilt * forward * (1 - MathF.Sin(theta));
+            return new Vector3(forward, (_b - inset) * spread * MathF.Sin(phi + _turn), up);
         }
 
-        // Grows out of the band along its normal, dips with the visor angle (measured from level,
-        // so the band's tilt is taken off) and bends down at the sides.
+        // Grows out of the band along its normal, dips with the visor angle and bends down at the sides.
         public Vector3 VisorPoint(float phi, float across)
         {
             var band = CrownPoint(phi, 0, 0);
-            var normal = Vector2.Normalize(new Vector2(MathF.Cos(phi) / _a, MathF.Sin(phi) / _b));
-            var reach = Design.VisorLength / 100 * Design.Size * MathF.Sqrt(MathF.Max(0, MathF.Cos(MathF.PI / 2 * phi / VisorHalfAngle))) * across;
-            var dip = MathF.Tan(Design.VisorAngle * MathF.PI / 180 + _tilt) * reach;
-            var side = band.Y / _b;
+            var head = phi + _turn;
+            var normal = Vector2.Normalize(new Vector2(MathF.Cos(head) / _a, MathF.Sin(head) / _b));
+            var profile = MathF.Pow(MathF.Max(0, MathF.Cos(MathF.PI / 2 * phi / VisorHalfAngle)), _taper);
+            var reach = Design.VisorLength / 100 * Design.Size * profile * across;
+            var dip = MathF.Tan(Design.VisorAngle * MathF.PI / 180) * reach;
+            var side = MathF.Sin(phi);
             var bend = Design.VisorCurve * 0.045f * Design.Size * side * side * across;
             return band + new Vector3(normal.X * reach, normal.Y * reach, -dip - bend);
         }
 
-        public Vector3 ToBone(Vector3 p)
+        // Undoes the turn, so the visor's texture layout is the same whichever way the cap faces.
+        public Vector3 ToCapFrame(Vector3 p)
         {
-            if (Design.Backwards) p = new Vector3(-p.X, -p.Y, p.Z);
-            return new Vector3(BandHeight + p.Z, HeadCentreForward + p.X, p.Y);
+            var (cos, sin) = (MathF.Cos(_turn), MathF.Sin(_turn));
+            return new Vector3(p.X * cos + p.Y * sin, -p.X * sin + p.Y * cos, p.Z);
         }
+
+        public Vector3 ToBone(Vector3 p) => new(BandHeight + p.Z, HeadCentreForward + p.X, p.Y);
     }
 }

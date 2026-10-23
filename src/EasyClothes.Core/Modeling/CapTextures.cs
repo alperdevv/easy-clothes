@@ -28,7 +28,7 @@ public static class CapTextures
                 var p = pattern.At(x, y);
                 var colour = Base(c, (x + 0.5f) / size, (y + 0.5f) / size) * (1 - 0.45f * p.Seam) * (1 + 0.035f * p.Weave);
                 colour = Vector3.Lerp(colour, stitch, 0.9f * p.Stitch);
-                colour *= 1 - 0.6f * p.Eyelet;
+                colour *= (1 - 0.6f * p.Eyelet) * (1 - 0.75f * p.Hole);
                 var o = (y * size + x) * 4;
                 pixels[o] = ToByte(colour.X);
                 pixels[o + 1] = ToByte(colour.Y);
@@ -48,7 +48,7 @@ public static class CapTextures
             for (var x = 0; x < NormalSize; x++)
             {
                 var p = pattern.At(x, y);
-                height[y * NormalSize + x] = -p.Seam - 0.4f * p.Stitch - 0.8f * p.Eyelet + 0.08f * p.Weave;
+                height[y * NormalSize + x] = -p.Seam - 0.4f * p.Stitch - 0.8f * p.Eyelet - 0.6f * p.Hole + 0.08f * p.Weave;
             }
         }
 
@@ -98,13 +98,14 @@ public static class CapTextures
 
     private static byte ToByte(float value) => (byte)Math.Clamp(MathF.Round(value * 255), 0, 255);
 
-    private readonly record struct Detail(float Seam, float Stitch, float Eyelet, float Weave);
+    private readonly record struct Detail(float Seam, float Stitch, float Eyelet, float Weave, float Hole = 0);
 
     // Detail masks at any texture size; distances are in pixels of a 1024 map so all sizes match.
     private sealed class Pattern
     {
         private readonly int _size;
         private readonly float _scale;
+        private readonly bool _meshBack;
         private readonly float[] _across;
         private readonly float[] _angle;
 
@@ -112,6 +113,7 @@ public static class CapTextures
         {
             _size = size;
             _scale = 1024f / size;
+            _meshBack = design.Style == CapStyle.Trucker;
             (_across, _angle) = VisorMaps(design, size);
         }
 
@@ -153,7 +155,18 @@ public static class CapTextures
                 var r = MathF.Sqrt(du * du + MathF.Pow((v - eyeletV) * px, 2));
                 eyelet = MathF.Max(eyelet, r < 2.5f ? 1 : Line(MathF.Abs(r - 4), 1.3f) * 0.6f);
             }
-            return new Detail(seam, Math.Clamp(stitch, 0, 1), eyelet, weave);
+            var hole = _meshBack && u is < 1f / 3 or >= 2f / 3 && bottom > 14 ? MeshHole(u * px, height) : 0;
+            return new Detail(seam, Math.Clamp(stitch, 0, 1), hole > 0 ? 0 : eyelet, weave, hole);
+        }
+
+        // Trucker back panels: staggered diamond holes in a plastic mesh.
+        private static float MeshHole(float x, float y)
+        {
+            const float cell = 9;
+            var column = MathF.Floor(x / cell);
+            var dx = Frac(x / cell) - 0.5f;
+            var dy = Frac(y / cell + (column % 2) * 0.5f) - 0.5f;
+            return Math.Clamp((0.32f - MathF.Abs(dx) - MathF.Abs(dy)) * 8, 0, 1);
         }
 
         private Detail VisorDetail(int i, float weave)
@@ -198,7 +211,7 @@ public static class CapTextures
         Array.Fill(across, float.NaN);
         if (design.VisorLength <= 0) return (across, angle);
 
-        var (points, s, phi) = CapModel.VisorGrid(design);
+        var (_, points, s, phi) = CapModel.VisorGrid(design);
         var extent = CapModel.VisorExtent(points);
         foreach (var (rect, mirror) in new[] { (CapModel.VisorTop, false), (CapModel.VisorUnder, true) })
         {

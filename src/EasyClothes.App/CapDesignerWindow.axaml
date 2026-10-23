@@ -54,6 +54,26 @@
             <Button DockPanel.Dock="Right" Classes="small" Content="Restablecer" Command="{Binding ResetShapeCommand}" ToolTip.Tip="Vuelve a la forma de partida sin tocar los colores" />
             <TextBlock Classes="header" Text="FORMA" Margin="0" />
           </DockPanel>
+          <TextBlock Classes="label" Text="Modelo" />
+          <ComboBox ItemsSource="{x:Static vm:CapStyleOption.All}" SelectedItem="{Binding Style}" HorizontalAlignment="Stretch"
+                    ToolTip.Tip="Carga la forma típica de cada modelo; luego puedes ajustarla con los controles">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:CapStyleOption">
+                <TextBlock Text="{Binding Label}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <Grid Classes="row" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+            <TextBlock Classes="label" Text="Giro" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Rotation, StringFormat={}{0:0}°}" />
+          </Grid>
+          <Slider Minimum="-180" Maximum="180" Value="{Binding Rotation}" ToolTip.Tip="Hacia dónde mira la visera: 0 delante, 90 a la izquierda, -90 a la derecha, 180 del revés" />
+          <UniformGrid Columns="4" Margin="0,0,0,6">
+            <Button Classes="small" Content="Delante" HorizontalAlignment="Stretch" Command="{Binding TurnCommand}" CommandParameter="0" />
+            <Button Classes="small" Content="Izquierda" HorizontalAlignment="Stretch" Command="{Binding TurnCommand}" CommandParameter="90" Margin="4,0,0,0" />
+            <Button Classes="small" Content="Derecha" HorizontalAlignment="Stretch" Command="{Binding TurnCommand}" CommandParameter="-90" Margin="4,0,0,0" />
+            <Button Classes="small" Content="Del revés" HorizontalAlignment="Stretch" Command="{Binding TurnCommand}" CommandParameter="180" Margin="4,0,0,0" />
+          </UniformGrid>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
             <TextBlock Classes="label" Text="Talla" />
             <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Size, StringFormat={}{0:0.00}}" />
@@ -69,6 +89,20 @@
             <TextBlock Grid.Column="1" Classes="muted value" Text="redondeada ↔ estructurada" />
           </Grid>
           <Slider Minimum="0" Maximum="1" Value="{Binding CrownShape}" />
+          <TextBlock Classes="label" Text="Tipo de visera" Margin="0,8,0,2" />
+          <ItemsControl ItemsSource="{x:Static vm:VisorPresetOption.All}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="5" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:VisorPresetOption">
+                <Button Classes="small" Content="{Binding Label}" HorizontalAlignment="Stretch" Margin="0,0,4,0"
+                        Command="{Binding $parent[Window].((vm:CapDesignerViewModel)DataContext).VisorPresetCommand}" CommandParameter="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
           <Grid Classes="row" ColumnDefinitions="*,Auto">
             <TextBlock Classes="label" Text="Largo de la visera" />
             <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding VisorLength, StringFormat={}{0:0.0} cm}" />
@@ -84,10 +118,17 @@
             <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding VisorAngle, StringFormat={}{0:0}°}" />
           </Grid>
           <Slider Minimum="-10" Maximum="30" Value="{Binding VisorAngle}" ToolTip.Tip="Grados hacia abajo desde la horizontal" />
-          <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,6,0,0">
-            <CheckBox Content="Del revés" IsChecked="{Binding Backwards}" />
-            <CheckBox Content="Botón arriba" IsChecked="{Binding Button}" />
-          </StackPanel>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Ancho de la visera" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="estrecha ↔ ancha" />
+          </Grid>
+          <Slider Minimum="0" Maximum="1" Value="{Binding VisorWidth}" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Forma de la visera" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="redondeada ↔ cuadrada" />
+          </Grid>
+          <Slider Minimum="0" Maximum="1" Value="{Binding VisorSquare}" />
+          <CheckBox Content="Botón arriba" IsChecked="{Binding Button}" Margin="0,6,0,0" />
 
           <TextBlock Classes="header" Text="COLORES" Margin="0,14,0,0" />
           <Grid Classes="row" ColumnDefinitions="*,Auto">
