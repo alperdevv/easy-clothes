@@ -135,7 +135,7 @@ public static class TextureDictionaryWriter
         _ => throw new NotSupportedException($"Unknown stride for {format}."),
     };
 
-    private static uint FormatCode(TextureFormat format) => format switch
+    internal static uint FormatCode(TextureFormat format) => format switch
     {
         TextureFormat.Dxt1 => 0x31545844,
         TextureFormat.Dxt5 => 0x35545844,
