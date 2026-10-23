@@ -50,20 +50,12 @@ public sealed record VisorPresetOption(string Label, Func<CapDesign, CapDesign> 
     ];
 }
 
-public enum CapDesignerAction
-{
-    None,
-    Create,
-    Reshape,
-    AddColours,
-}
-
 // The mannequin and the head bone placing the cap on it, for one gender.
 public sealed record CapStage(IReadOnlyList<RenderItem> Body, Matrix4x4? Anchor);
 
 // Edits a cap's shape and colours with a live preview. A new cap is created from it; an existing one
 // either takes the new shape (its textures keep fitting) or gets the colours as another texture.
-public sealed partial class CapDesignerViewModel : ObservableObject
+public sealed partial class CapDesignerViewModel : ObservableObject, IGarmentDesigner
 {
     private const int PreviewTextureSize = 512;
 
@@ -89,7 +81,7 @@ public sealed partial class CapDesignerViewModel : ObservableObject
     public bool IsNew => !IsEditing;
     public string Title => IsEditing ? "Editar gorra" : "Nueva gorra";
 
-    public CapDesignerAction Action { get; private set; }
+    public DesignerAction Action { get; private set; }
     public event Action? CloseRequested;
     public event Action? PreviewChanged;
 
@@ -232,13 +224,13 @@ public sealed partial class CapDesignerViewModel : ObservableObject
     };
 
     [RelayCommand]
-    private void Create() => Finish(CapDesignerAction.Create);
+    private void Create() => Finish(DesignerAction.Create);
 
     [RelayCommand]
-    private void Reshape() => Finish(CapDesignerAction.Reshape);
+    private void Reshape() => Finish(DesignerAction.Reshape);
 
     [RelayCommand]
-    private void AddColours() => Finish(CapDesignerAction.AddColours);
+    private void AddColours() => Finish(DesignerAction.AddColours);
 
     [RelayCommand]
     private void ResetShape() => Load(Design.WithStyle(Style.Value));
@@ -314,7 +306,7 @@ public sealed partial class CapDesignerViewModel : ObservableObject
         SelectedTemplate = Templates.FirstOrDefault();
     }
 
-    private void Finish(CapDesignerAction action)
+    private void Finish(DesignerAction action)
     {
         Action = action;
         CloseRequested?.Invoke();

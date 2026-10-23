@@ -7,6 +7,10 @@ namespace EasyClothes.Core.Viewing;
 
 public sealed record BodyPart(ComponentSlot Slot, string ModelPath, string? TexturePath);
 
+// A skinned body part in the ped's bind pose, with the skeleton its bone indices refer to. Legs is the
+// mannequin's trousers, which garments that reach the hips must stay outside of.
+public sealed record SkinnedBody(MeshData Mesh, IReadOnlyList<Bone> Skeleton, MeshData? Legs = null);
+
 // The mannequin around a garment; props also carry the bone transform that places them on it.
 public sealed record BodyFit(IReadOnlyList<BodyPart> Parts, Matrix4x4? Anchor)
 {
@@ -20,8 +24,8 @@ public static class BaseBody
     // Variations from the base game archive that make a neutral mannequin.
     private static readonly Dictionary<PedGender, (ComponentSlot Slot, int Index)[]> Outfits = new()
     {
-        [PedGender.Male] = [(ComponentSlot.Head, 0), (ComponentSlot.Hair, 0), (ComponentSlot.Torso, 15), (ComponentSlot.Legs, 0), (ComponentSlot.Shoes, 1)],
-        [PedGender.Female] = [(ComponentSlot.Head, 0), (ComponentSlot.Hair, 0), (ComponentSlot.Torso, 15), (ComponentSlot.Top, 15), (ComponentSlot.Legs, 0), (ComponentSlot.Shoes, 3)],
+        [PedGender.Male] = [(ComponentSlot.Head, 0), (ComponentSlot.Hair, 0), (ComponentSlot.Torso, BareTorso), (ComponentSlot.Legs, 0), (ComponentSlot.Shoes, 1)],
+        [PedGender.Female] = [(ComponentSlot.Head, 0), (ComponentSlot.Hair, 0), (ComponentSlot.Torso, BareTorso), (ComponentSlot.Top, 15), (ComponentSlot.Legs, 0), (ComponentSlot.Shoes, 3)],
     };
 
     // Accepts the parent folder or one of the ped folders inside it.
@@ -72,6 +76,39 @@ public static class BaseBody
     };
 
     private static readonly ConcurrentDictionary<string, IReadOnlyList<Bone>> Skeletons = new();
+    private static readonly ConcurrentDictionary<string, MeshData> Meshes = new();
+
+    // The bare torso and arms (uppr) with its bone weights and skeleton, which body garments are cut from.
+    // The skin is split over two geometries (one per shader), so they are merged into one mesh.
+    public static SkinnedBody? Torso(string root, PedGender gender)
+    {
+        var torso = ModelPath(root, gender, ComponentSlot.Torso, BareTorso);
+        var skeletonPath = Path.Combine(root, PedSlotNames.PedModel(gender) + ".yft");
+        if (torso is null || !File.Exists(skeletonPath)) return null;
+        try
+        {
+            var skeleton = Skeletons.GetOrAdd(skeletonPath, p => Skeleton.ReadFragment(ResourceFile.Read(p)));
+            var legs = ModelPath(root, gender, ComponentSlot.Legs, Outfits[gender].First(o => o.Slot == ComponentSlot.Legs).Index);
+            return new SkinnedBody(LoadMerged(torso), skeleton, legs is null ? null : LoadMerged(legs));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException)
+        {
+            return null;
+        }
+    }
+
+    private const int BareTorso = 15;
+
+    private static string? ModelPath(string root, PedGender gender, ComponentSlot slot, int index)
+    {
+        var dir = Path.Combine(root, PedSlotNames.PedModel(gender));
+        return new[] { "r", "u" }.Select(s => Path.Combine(dir, $"{PedSlotNames.FileCode(slot)}_{index:D3}_{s}.ydd")).FirstOrDefault(File.Exists);
+    }
+
+    private static MeshData LoadMerged(string path) => Meshes.GetOrAdd(path, p => MeshData.Merge(
+        DrawableDictionary.Read(ResourceFile.Read(p), includeMeshes: true)
+            .SelectMany(d => d.Lods.Take(1)).SelectMany(l => l.Models).SelectMany(m => m)
+            .Select(g => g.Mesh!).ToList()));
 
     // Bone space to body space for a prop, or null without the exported ped skeleton (.yft).
     public static Matrix4x4? PropAnchor(string root, PedGender gender, PropSlot slot)

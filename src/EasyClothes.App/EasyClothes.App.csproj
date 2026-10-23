@@ -6,6 +6,8 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AssemblyTitle>EasyClothes</AssemblyTitle>
+    <Description>Editor de packs de ropa de GTA V para FiveM</Description>
   </PropertyGroup>
 
   <ItemGroup>

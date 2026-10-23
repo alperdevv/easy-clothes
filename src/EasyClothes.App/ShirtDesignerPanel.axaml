@@ -1,0 +1,312 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:EasyClothes.App.Controls"
+             xmlns:vm="using:EasyClothes.App.ViewModels"
+             xmlns:core="using:EasyClothes.Core.Modeling"
+             x:Class="EasyClothes.App.ShirtDesignerPanel"
+             x:DataType="vm:ShirtDesignerViewModel">
+  <UserControl.Styles>
+    <Style Selector="Grid.row">
+      <Setter Property="Margin" Value="0,2" />
+    </Style>
+    <Style Selector="Grid.row > TextBlock.value">
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="ColorPicker">
+      <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+    <Style Selector="Border.item">
+      <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="10,4,10,8" />
+      <Setter Property="Margin" Value="0,6,0,0" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel>
+    <Border Classes="card">
+      <StackPanel Spacing="4">
+        <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Bookmark}" Text="MIS PLANTILLAS" />
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="flat square danger" Margin="2,0,0,0" Command="{Binding DeleteTemplateCommand}" ToolTip.Tip="Borrar la plantilla">
+            <ui:Icon Size="15" Data="{StaticResource Icon.Trash2}" />
+          </Button>
+          <Button DockPanel.Dock="Right" Classes="small" Content="Usar" Margin="4,0,0,0" Command="{Binding UseTemplateCommand}"
+                  ToolTip.Tip="Carga la forma y el aspecto de la plantilla" />
+          <ComboBox ItemsSource="{Binding Templates}" SelectedItem="{Binding SelectedTemplate}" HorizontalAlignment="Stretch"
+                    PlaceholderText="Aún no tienes plantillas">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="core:ShirtTemplate">
+                <TextBlock Text="{Binding Name}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </DockPanel>
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="small" Margin="4,0,0,0" Command="{Binding SaveTemplateCommand}"
+                  ToolTip.Tip="Guarda la forma y el aspecto actuales para usarlos en otras prendas">
+            <ui:IconLabel Icon="{StaticResource Icon.Save}" IconSize="14" Spacing="5" Text="Guardar diseño" />
+          </Button>
+          <TextBox Text="{Binding TemplateName}" PlaceholderText="Nombre de la plantilla" />
+        </DockPanel>
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding TemplateNote}" IsVisible="{Binding TemplateNote, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card">
+      <StackPanel>
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="flat small" Command="{Binding ResetShapeCommand}" ToolTip.Tip="Vuelve a la forma típica del modelo sin tocar el aspecto">
+            <ui:IconLabel Icon="{StaticResource Icon.RotateCcw}" IconSize="13" Spacing="5" Text="Restablecer" />
+          </Button>
+          <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Shapes}" Text="FORMA" />
+        </DockPanel>
+        <TextBlock Classes="label" Text="Modelo" />
+        <ComboBox ItemsSource="{x:Static vm:ShirtStyleOption.All}" SelectedItem="{Binding Style}" HorizontalAlignment="Stretch"
+                  ToolTip.Tip="Carga la forma típica de cada modelo; luego puedes ajustarla con los controles">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:ShirtStyleOption">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <Grid Classes="row" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+          <TextBlock Classes="label" Text="Manga" />
+          <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding SleeveLabel}" />
+        </Grid>
+        <Slider Minimum="0" Maximum="1" Value="{Binding Sleeve}" ToolTip.Tip="Desde sin manga hasta la muñeca" />
+        <ItemsControl ItemsSource="{x:Static vm:SleevePresetOption.All}" Margin="0,0,0,6">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Columns="5" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:SleevePresetOption">
+              <Button Classes="small" Content="{Binding Label}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,4,0"
+                      Command="{Binding $parent[UserControl].((vm:ShirtDesignerViewModel)DataContext).SleevePresetCommand}" CommandParameter="{Binding}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <CheckBox Content="Puños vueltos" IsChecked="{Binding RolledCuffs}" />
+
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <TextBlock Classes="label" Text="Largo" />
+          <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding LengthLabel}" />
+        </Grid>
+        <Slider Minimum="-12" Maximum="20" Value="{Binding Length}" ToolTip.Tip="Hacia la izquierda, crop top; hacia la derecha, más larga por debajo de la cintura" />
+        <TextBlock Classes="label" Text="Bajo" />
+        <ComboBox ItemsSource="{x:Static vm:ShirtChoices.Hems}" SelectedItem="{Binding Hem}" HorizontalAlignment="Stretch">
+        </ComboBox>
+
+        <Grid Classes="row" ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+          <TextBlock Classes="label" Text="Holgura" />
+          <TextBlock Grid.Column="1" Classes="muted value" Text="ajustada ↔ ancha" />
+        </Grid>
+        <Slider Minimum="0" Maximum="1" Value="{Binding Fit}" />
+
+        <TextBlock Classes="label" Text="Pieza de cuello" />
+        <ComboBox ItemsSource="{x:Static vm:ShirtChoices.Collars}" SelectedItem="{Binding Collar}" HorizontalAlignment="Stretch"
+                  ToolTip.Tip="Polo y camisa llevan cuello doblado y botones; el cuello alto sube por el cuello">
+        </ComboBox>
+        <StackPanel IsVisible="{Binding HasNeckline}">
+          <TextBlock Classes="label" Text="Escote" />
+          <ComboBox ItemsSource="{x:Static vm:ShirtChoices.Necklines}" SelectedItem="{Binding Neckline}" HorizontalAlignment="Stretch">
+          </ComboBox>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Profundidad del escote" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding NeckDepth, StringFormat={}{0:0} cm}" />
+          </Grid>
+          <Slider Minimum="0" Maximum="15" Value="{Binding NeckDepth}" ToolTip.Tip="Lo que baja el cuello por delante" />
+        </StackPanel>
+        <CheckBox Content="Bolsillo en el pecho" IsChecked="{Binding Pocket}" Margin="0,6,0,0" />
+
+        <StackPanel IsVisible="{Binding IsNew}">
+          <TextBlock Classes="label" Text="Se lleva" />
+          <ComboBox ItemsSource="{x:Static vm:ShirtChoices.Layers}" SelectedItem="{Binding Layer}" HorizontalAlignment="Stretch"
+                    ToolTip.Tip="Interior: va en el hueco de camisetas interiores, para llevarla debajo de chaquetas y abrigos">
+          </ComboBox>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card">
+      <StackPanel>
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="flat small" Command="{Binding MatchColoursCommand}" ToolTip.Tip="Pone mangas y remates del color del cuerpo">
+            <ui:IconLabel Icon="{StaticResource Icon.PaintBucket}" IconSize="13" Spacing="5" Text="Todo igual" />
+          </Button>
+          <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Palette}" Text="COLORES" />
+        </DockPanel>
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <TextBlock Classes="label" Text="Cuerpo" VerticalAlignment="Center" />
+          <ColorPicker Grid.Column="1" Color="{Binding BodyColor}" IsAlphaVisible="False" />
+        </Grid>
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <TextBlock Classes="label" Text="Mangas" VerticalAlignment="Center" />
+          <ColorPicker Grid.Column="1" Color="{Binding SleevesColor}" IsAlphaVisible="False" />
+        </Grid>
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <TextBlock Classes="label" Text="Cuello, puños y bajo" VerticalAlignment="Center" />
+          <ColorPicker Grid.Column="1" Color="{Binding TrimColor}" IsAlphaVisible="False" />
+        </Grid>
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <TextBlock Classes="label" Text="Costuras" VerticalAlignment="Center" />
+          <ColorPicker Grid.Column="1" Color="{Binding StitchColor}" IsAlphaVisible="False" />
+        </Grid>
+        <Grid Classes="row" ColumnDefinitions="*,Auto" IsVisible="{Binding HasButtons}">
+          <TextBlock Classes="label" Text="Botones" VerticalAlignment="Center" />
+          <ColorPicker Grid.Column="1" Color="{Binding ButtonsColor}" IsAlphaVisible="False" />
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card">
+      <StackPanel>
+        <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Grid3x3}" Text="ESTAMPADO" />
+        <ComboBox ItemsSource="{x:Static vm:ShirtChoices.Patterns}" SelectedItem="{Binding Pattern}" HorizontalAlignment="Stretch">
+        </ComboBox>
+        <StackPanel IsVisible="{Binding HasPattern}">
+          <Grid Classes="row" ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+            <TextBlock Classes="label" Text="Color" VerticalAlignment="Center" />
+            <ColorPicker Grid.Column="1" Color="{Binding PatternColor}" IsAlphaVisible="False" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto" IsVisible="{Binding HasSecondPatternColour}">
+            <TextBlock Classes="label" Text="Segundo color" VerticalAlignment="Center" />
+            <ColorPicker Grid.Column="1" Color="{Binding PatternColor2}" IsAlphaVisible="False" />
+          </Grid>
+          <StackPanel IsVisible="{Binding HasPatternScale}">
+            <Grid Classes="row" ColumnDefinitions="*,Auto">
+              <TextBlock Classes="label" Text="Tamaño" />
+              <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding PatternScale, StringFormat={}{0:0.#} cm}" />
+            </Grid>
+            <Slider Minimum="1" Maximum="30" Value="{Binding PatternScale}" />
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card">
+      <StackPanel>
+        <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Stamp}" Text="LOGOS Y TEXTOS" />
+        <ItemsControl ItemsSource="{Binding Graphics}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:GraphicViewModel">
+              <Border Classes="item">
+                <StackPanel>
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Classes="flat square danger" ToolTip.Tip="Quitar"
+                            Command="{Binding $parent[UserControl].((vm:ShirtDesignerViewModel)DataContext).RemoveGraphicCommand}" CommandParameter="{Binding}">
+                      <ui:Icon Size="14" Data="{StaticResource Icon.Trash2}" />
+                    </Button>
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  </DockPanel>
+                  <DockPanel IsVisible="{Binding IsText}" Margin="0,4,0,0">
+                    <ColorPicker DockPanel.Dock="Right" Color="{Binding TextColor}" IsAlphaVisible="False" Margin="6,0,0,0" />
+                    <TextBox Text="{Binding Text}" PlaceholderText="Nombre, número…" />
+                  </DockPanel>
+                  <TextBlock Classes="label" Text="Dónde" />
+                  <ComboBox ItemsSource="{x:Static vm:ShirtChoices.Zones}" SelectedItem="{Binding Zone}" HorizontalAlignment="Stretch">
+                  </ComboBox>
+                  <Grid Classes="row" ColumnDefinitions="*,Auto">
+                    <TextBlock Classes="label" Text="Ancho" />
+                    <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Size, StringFormat={}{0:0} cm}" />
+                  </Grid>
+                  <Slider Minimum="2" Maximum="40" Value="{Binding Size}" />
+                  <Grid ColumnDefinitions="*,8,*">
+                    <StackPanel>
+                      <TextBlock Classes="label" Text="Izquierda / derecha" />
+                      <Slider Minimum="-15" Maximum="15" Value="{Binding OffsetX}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                      <TextBlock Classes="label" Text="Abajo / arriba" />
+                      <Slider Minimum="-15" Maximum="15" Value="{Binding OffsetY}" />
+                    </StackPanel>
+                  </Grid>
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <UniformGrid Columns="2" Margin="0,8,0,0">
+          <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,4,0" Command="{Binding AddImageCommand}"
+                  ToolTip.Tip="Un PNG (mejor con fondo transparente) o una textura .ytd">
+            <ui:IconLabel Icon="{StaticResource Icon.Image}" IconSize="14" Spacing="5" Text="Imagen…" />
+          </Button>
+          <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="4,0,0,0" Command="{Binding AddTextCommand}"
+                  ToolTip.Tip="Un nombre, un número de dorsal, una frase…">
+            <ui:IconLabel Icon="{StaticResource Icon.Plus}" IconSize="14" Spacing="5" Text="Texto" />
+          </Button>
+        </UniformGrid>
+        <TextBlock Classes="muted" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="11"
+                   Text="Las dos mangas comparten textura: lo que pongas en una sale en las dos." />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card">
+      <StackPanel>
+        <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Layers}" Text="TELA Y DESGASTE" />
+        <ComboBox ItemsSource="{x:Static vm:ShirtChoices.Fabrics}" SelectedItem="{Binding Fabric}" HorizontalAlignment="Stretch">
+        </ComboBox>
+        <Grid Classes="row" ColumnDefinitions="*,Auto" Margin="0,6,0,0">
+          <TextBlock Classes="label" Text="Arrugas" />
+          <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Wrinkles, StringFormat={}{0:P0}}" />
+        </Grid>
+        <Slider Minimum="0" Maximum="1" Value="{Binding Wrinkles}" />
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <TextBlock Classes="label" Text="Suciedad" />
+          <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Dirt, StringFormat={}{0:P0}}" />
+        </Grid>
+        <Slider Minimum="0" Maximum="1" Value="{Binding Dirt}" />
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <TextBlock Classes="label" Text="Decolorado" />
+          <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Fade, StringFormat={}{0:P0}}" />
+        </Grid>
+        <Slider Minimum="0" Maximum="1" Value="{Binding Fade}" />
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <TextBlock Classes="label" Text="Rozaduras" />
+          <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Distress, StringFormat={}{0:P0}}" />
+        </Grid>
+        <Slider Minimum="0" Maximum="1" Value="{Binding Distress}" />
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0">
+          <ui:Icon Classes="muted" Size="14" Data="{StaticResource Icon.Info}" VerticalAlignment="Top" Margin="0,1,0,0" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="280" FontSize="11"
+                     Text="El relieve de la tela y las arrugas va en el modelo: lo comparten todas las texturas de la prenda." />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card" IsVisible="{Binding IsNew}">
+      <StackPanel>
+        <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Copy}" Text="MÁS COLORES" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" FontSize="11"
+                   Text="Cada color crea otra textura (b, c, d…) con el mismo diseño; lo que tenía el color del cuerpo cambia con él." />
+        <ItemsControl ItemsSource="{Binding ExtraColours}" Margin="0,6,0,0">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:ExtraColourViewModel">
+              <StackPanel Orientation="Horizontal" Margin="0,0,8,6">
+                <ColorPicker Color="{Binding Color}" IsAlphaVisible="False" />
+                <Button Classes="flat square" ToolTip.Tip="Quitar"
+                        Command="{Binding $parent[UserControl].((vm:ShirtDesignerViewModel)DataContext).RemoveExtraColourCommand}" CommandParameter="{Binding}">
+                  <ui:Icon Size="13" Data="{StaticResource Icon.X}" />
+                </Button>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding AddExtraColourCommand}">
+          <ui:IconLabel Icon="{StaticResource Icon.Plus}" IconSize="14" Spacing="5" Text="Añadir color" />
+        </Button>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

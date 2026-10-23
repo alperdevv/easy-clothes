@@ -12,6 +12,9 @@ public sealed record EmbeddedTexture(string Name, EncodedTexture Texture);
 // lives in the .ytd next to it; the normal and specular maps are embedded like the game's own props.
 public sealed record PropDrawable(string Name, MeshData Mesh, string DiffuseName, EmbeddedTexture Normal, EmbeddedTexture Specular);
 
+// A clothing component: a skinned mesh in the ped's bind pose whose vertices name skeleton bones directly.
+public sealed record ComponentDrawable(string Name, MeshData Mesh, string DiffuseName, EmbeddedTexture Normal, EmbeddedTexture Specular);
+
 // Writes drawable dictionaries (.ydd) with the structures and values found in the game's ped files.
 public static class DrawableWriter
 {
@@ -28,9 +31,17 @@ public static class DrawableWriter
     private const ulong IndexBufferVft = 0x1_4061B158;
 
     // Position, normal, colour 0 and 1, two UV sets and a tangent: 64 bytes, as in the game's props.
-    private const uint VertexFlags = 0x40F9;
+    // Components add four blend weights and indices after the position: 72 bytes.
+    private const uint PropVertexFlags = 0x40F9;
+    private const uint SkinnedVertexFlags = 0x40FF;
     private const ulong VertexTypes = 0x7755555555996996;
-    private const int VertexStride = 64;
+
+    // Ped components index the skeleton directly through an identity table of this size.
+    private const int BoneTableSize = 128;
+    private const uint SkinnedBinding = 0x180;
+    private const ushort PropModelMask = 0xFF;
+    private const ushort SkinnedModelMask = 0x1FF;
+    private const uint PaletteSamplerHash = 0xAB98831E;
 
     private const float LodDistance = 9998;
     private const uint RenderMask = 0xFF01;
@@ -39,37 +50,46 @@ public static class DrawableWriter
 
     private enum Value { Texture, Vector }
 
-    private sealed record Parameter(string Name, byte Slot, Value Kind, Vector4 Data = default, ulong Texture = 0);
+    private sealed record Parameter(string Name, byte Slot, Value Kind, Vector4 Data = default, ulong Texture = 0, uint? Hash = null);
 
-    public static ResourceFile CreateProp(PropDrawable prop)
+    public static ResourceFile CreateProp(PropDrawable prop) =>
+        Create(prop.Name, prop.Mesh, prop.DiffuseName, prop.Normal, prop.Specular, skinned: false);
+
+    public static ResourceFile CreateComponent(ComponentDrawable component)
     {
-        var mesh = prop.Mesh;
+        if (!component.Mesh.IsSkinned)
+            throw new ArgumentException("A clothing component needs bone weights on every vertex.", nameof(component));
+        return Create(component.Name, component.Mesh, component.DiffuseName, component.Normal, component.Specular, skinned: true);
+    }
+
+    private static ResourceFile Create(string name, MeshData mesh, string diffuseName, EmbeddedTexture normal, EmbeddedTexture specular, bool skinned)
+    {
         if (mesh.VertexCount is 0 or > ushort.MaxValue)
-            throw new ArgumentException($"A prop needs between 1 and {ushort.MaxValue} vertices, got {mesh.VertexCount}.", nameof(prop));
+            throw new ArgumentException($"A drawable needs between 1 and {ushort.MaxValue} vertices, got {mesh.VertexCount}.", nameof(mesh));
 
         var b = new ResourceBuilder();
         var root = b.Reserve(0x40);
-        var vertices = b.Add(Vertices(mesh));
+        var vertices = b.Add(Vertices(mesh, skinned));
         var indices = b.Add(Indices(mesh));
         var drawable = b.Reserve(0xD0);
         var (min, max) = MeshBounds.Of([mesh]);
 
         b.UInt64(drawable, DrawableVft);
-        b.UInt64(drawable + 0x10, ShaderGroup(b, prop));
+        b.UInt64(drawable + 0x10, ShaderGroup(b, diffuseName, normal, specular, skinned));
         var center = (min + max) / 2;
         WriteVector(b, drawable + 0x20, center, Radius(mesh, center));
         WriteVector(b, drawable + 0x30, min, BitConverter.UInt32BitsToSingle(0x7F800001));
         WriteVector(b, drawable + 0x40, max, BitConverter.UInt32BitsToSingle(0x7F800001));
         for (var lod = 0; lod < 4; lod++) b.Float(drawable + 0x70 + (ulong)(lod * 4), LodDistance);
         b.UInt32(drawable + 0x80, RenderMask);
-        var (models, modelsSize) = Models(b, mesh, vertices, indices, min, max);
+        var (models, modelsSize) = Models(b, mesh, vertices, indices, min, max, skinned);
         b.UInt64(drawable + 0x50, models);
         b.UInt16(drawable + 0x9A, (ushort)(modelsSize / 16));
         b.UInt64(drawable + 0xA0, models);
-        b.UInt64(drawable + 0xA8, b.AddString(prop.Name));
+        b.UInt64(drawable + 0xA8, b.AddString(name));
 
         var hash = b.Reserve(4);
-        b.UInt32(hash, Jenkins.Hash(prop.Name));
+        b.UInt32(hash, Jenkins.Hash(name));
         var items = b.Reserve(8);
         b.UInt64(items, drawable);
         var pages = b.Reserve(0x20);
@@ -84,15 +104,15 @@ public static class DrawableWriter
         return b.Build(DrawableDictionary.ResourceVersion);
     }
 
-    private static ulong ShaderGroup(ResourceBuilder b, PropDrawable prop)
+    private static ulong ShaderGroup(ResourceBuilder b, string diffuseName, EmbeddedTexture normal, EmbeddedTexture specular, bool skinned)
     {
         // Group, shader list and shader sit together; the group records their size in 16-byte units.
         var group = b.Reserve(0x40);
         var list = b.Reserve(8);
         var shader = b.Reserve(0x30);
-        var parameters = new Parameter[]
+        var parameters = new List<Parameter>
         {
-            new("DiffuseSampler", 0, Value.Texture, Texture: TextureReference(b, prop.DiffuseName)),
+            new("DiffuseSampler", 0, Value.Texture, Texture: TextureReference(b, diffuseName)),
             new("VolumeSampler", 3, Value.Texture, Texture: TextureReference(b, "givemechecker")),
             new("BumpSampler", 4, Value.Texture),
             new("SpecSampler", 5, Value.Texture),
@@ -106,17 +126,19 @@ public static class DrawableWriter
             new("StubbleControl", 0xB4, Value.Vector, new Vector4(2, 0.6f, 0, 0)),
         };
 
-        var (dictionary, embedded) = EmbeddedTextures(b, [(prop.Normal, NormalUsage), (prop.Specular, SpecularUsage)]);
+        var (dictionary, embedded) = EmbeddedTextures(b, [(normal, NormalUsage), (specular, SpecularUsage)]);
         parameters[2] = parameters[2] with { Texture = embedded[0] };
         parameters[3] = parameters[3] with { Texture = embedded[1] };
+        // Components carry an empty palette slot, as the game's own clothing does.
+        if (skinned) parameters.Insert(1, new Parameter("", 2, Value.Texture, Hash: PaletteSamplerHash));
 
         var vectors = parameters.Count(p => p.Kind == Value.Vector);
-        var headerSize = parameters.Length * 16;
+        var headerSize = parameters.Count * 16;
         var dataSize = headerSize + vectors * 16;
-        var blockSize = dataSize + parameters.Length * 4 + 32;
+        var blockSize = dataSize + parameters.Count * 4 + 32;
         var block = b.Reserve(blockSize);
         var data = block + (ulong)headerSize;
-        for (var i = 0; i < parameters.Length; i++)
+        for (var i = 0; i < parameters.Count; i++)
         {
             var p = parameters[i];
             var entry = block + (ulong)(i * 16);
@@ -132,12 +154,12 @@ public static class DrawableWriter
             data += 16;
         }
         var hashes = block + (ulong)dataSize;
-        for (var i = 0; i < parameters.Length; i++)
-            b.UInt32(hashes + (ulong)(i * 4), Jenkins.Hash(parameters[i].Name));
+        for (var i = 0; i < parameters.Count; i++)
+            b.UInt32(hashes + (ulong)(i * 4), parameters[i].Hash ?? Jenkins.Hash(parameters[i].Name));
 
         b.UInt64(shader, block);
         b.UInt32(shader + 0x08, Jenkins.Hash("ped"));
-        b.UInt8(shader + 0x10, (byte)parameters.Length);
+        b.UInt8(shader + 0x10, (byte)parameters.Count);
         b.UInt16(shader + 0x12, 0x8000);
         b.UInt16(shader + 0x14, (ushort)dataSize);
         b.UInt16(shader + 0x16, (ushort)blockSize);
@@ -203,7 +225,7 @@ public static class DrawableWriter
     }
 
     // The high-detail model list with its one model and geometry, laid out back to back.
-    private static (ulong List, int Size) Models(ResourceBuilder b, MeshData mesh, ulong vertices, ulong indices, Vector3 min, Vector3 max)
+    private static (ulong List, int Size) Models(ResourceBuilder b, MeshData mesh, ulong vertices, ulong indices, Vector3 min, Vector3 max, bool skinned)
     {
         var list = b.Reserve(0x10);
         var listItems = b.Reserve(8);
@@ -220,35 +242,47 @@ public static class DrawableWriter
         b.Array(model + 0x08, geometries, 1);
         b.UInt64(model + 0x18, bounds);
         b.UInt64(model + 0x20, shaderMap);
-        b.UInt16(model + 0x2C, 0xFF);
+        if (skinned) b.UInt32(model + 0x28, SkinnedBinding);
+        b.UInt16(model + 0x2C, skinned ? SkinnedModelMask : PropModelMask);
         b.UInt16(model + 0x2E, 1);
         b.UInt64(geometries, geometry);
         WriteVector(b, bounds, min, 0);
         WriteVector(b, bounds + 0x10, max, 0);
 
         b.UInt64(geometry, GeometryVft);
-        b.UInt64(geometry + 0x18, VertexBuffer(b, mesh, vertices));
+        var stride = Stride(skinned);
+        b.UInt64(geometry + 0x18, VertexBuffer(b, mesh, vertices, skinned));
         b.UInt64(geometry + 0x38, IndexBuffer(b, mesh, indices));
         b.UInt32(geometry + 0x58, (uint)mesh.Indices.Length);
         b.UInt32(geometry + 0x5C, (uint)mesh.TriangleCount);
         b.UInt16(geometry + 0x60, (ushort)mesh.VertexCount);
         b.UInt16(geometry + 0x62, 3);
-        b.UInt16(geometry + 0x70, VertexStride);
+        b.UInt16(geometry + 0x70, (ushort)stride);
         b.UInt64(geometry + 0x78, vertices);
+        if (skinned)
+        {
+            var bones = b.Reserve(BoneTableSize * 2);
+            for (var i = 0; i < BoneTableSize; i++) b.UInt16(bones + (ulong)(i * 2), (ushort)i);
+            b.UInt64(geometry + DrawableDictionary.GeometryBoneIds, bones);
+            b.UInt16(geometry + DrawableDictionary.GeometryBoneCount, BoneTableSize);
+        }
         return (list, (int)(geometry + 0x98 - list));
     }
 
-    private static ulong VertexBuffer(ResourceBuilder b, MeshData mesh, ulong vertices)
+    private static int Stride(bool skinned) => skinned ? 72 : 64;
+
+    private static ulong VertexBuffer(ResourceBuilder b, MeshData mesh, ulong vertices, bool skinned)
     {
+        var flags = skinned ? SkinnedVertexFlags : PropVertexFlags;
         var declaration = b.Reserve(0x10);
-        b.UInt32(declaration, VertexFlags);
-        b.UInt16(declaration + 4, VertexStride);
-        b.UInt8(declaration + 7, (byte)BitOperations.PopCount(VertexFlags));
+        b.UInt32(declaration, flags);
+        b.UInt16(declaration + 4, (ushort)Stride(skinned));
+        b.UInt8(declaration + 7, (byte)BitOperations.PopCount(flags));
         b.UInt64(declaration + 8, VertexTypes);
 
         var buffer = b.Reserve(0x80);
         b.UInt64(buffer, VertexBufferVft);
-        b.UInt16(buffer + 0x08, VertexStride);
+        b.UInt16(buffer + 0x08, (ushort)Stride(skinned));
         b.UInt64(buffer + 0x10, vertices);
         b.UInt32(buffer + 0x18, (uint)mesh.VertexCount);
         b.UInt64(buffer + 0x20, vertices);
@@ -266,28 +300,36 @@ public static class DrawableWriter
     }
 
     // Colour 0 carries shading hints in ped models; this is their most common value on props.
-    private static byte[] Vertices(MeshData mesh)
+    private static byte[] Vertices(MeshData mesh, bool skinned)
     {
         var tangents = MeshTangents.Compute(mesh);
-        var data = new byte[mesh.VertexCount * VertexStride];
+        var stride = Stride(skinned);
+        var skin = skinned ? 8 : 0;
+        var data = new byte[mesh.VertexCount * stride];
         for (var v = 0; v < mesh.VertexCount; v++)
         {
-            var o = data.AsSpan(v * VertexStride, VertexStride);
+            var o = data.AsSpan(v * stride, stride);
             for (var c = 0; c < 3; c++)
             {
                 BinaryPrimitives.WriteSingleLittleEndian(o[(c * 4)..], mesh.Positions[v * 3 + c]);
-                BinaryPrimitives.WriteSingleLittleEndian(o[(12 + c * 4)..], mesh.Normals[v * 3 + c]);
+                BinaryPrimitives.WriteSingleLittleEndian(o[(skin + 12 + c * 4)..], mesh.Normals[v * 3 + c]);
             }
-            o[24] = 255;
-            o[25] = 128;
-            o[27] = 255;
-            BinaryPrimitives.WriteSingleLittleEndian(o[32..], mesh.TexCoords[v * 2]);
-            BinaryPrimitives.WriteSingleLittleEndian(o[36..], mesh.TexCoords[v * 2 + 1]);
-            BinaryPrimitives.WriteSingleLittleEndian(o[40..], 1);
-            BinaryPrimitives.WriteSingleLittleEndian(o[48..], tangents[v].X);
-            BinaryPrimitives.WriteSingleLittleEndian(o[52..], tangents[v].Y);
-            BinaryPrimitives.WriteSingleLittleEndian(o[56..], tangents[v].Z);
-            BinaryPrimitives.WriteSingleLittleEndian(o[60..], tangents[v].W);
+            if (skinned)
+            {
+                mesh.BlendWeights.AsSpan(v * 4, 4).CopyTo(o[12..]);
+                mesh.BlendIndices.AsSpan(v * 4, 4).CopyTo(o[16..]);
+            }
+            var rest = o[(skin + 24)..];
+            rest[0] = 255;
+            rest[1] = 128;
+            rest[3] = 255;
+            BinaryPrimitives.WriteSingleLittleEndian(rest[8..], mesh.TexCoords[v * 2]);
+            BinaryPrimitives.WriteSingleLittleEndian(rest[12..], mesh.TexCoords[v * 2 + 1]);
+            BinaryPrimitives.WriteSingleLittleEndian(rest[16..], 1);
+            BinaryPrimitives.WriteSingleLittleEndian(rest[24..], tangents[v].X);
+            BinaryPrimitives.WriteSingleLittleEndian(rest[28..], tangents[v].Y);
+            BinaryPrimitives.WriteSingleLittleEndian(rest[32..], tangents[v].Z);
+            BinaryPrimitives.WriteSingleLittleEndian(rest[36..], tangents[v].W);
         }
         return data;
     }

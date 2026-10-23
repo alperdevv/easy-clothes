@@ -1,0 +1,121 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:app="using:EasyClothes.App"
+        xmlns:viewer="using:EasyClothes.App.Viewer"
+        xmlns:ui="using:EasyClothes.App.Controls"
+        xmlns:vm="using:EasyClothes.App.ViewModels"
+        x:Class="EasyClothes.App.GarmentCreatorWindow"
+        x:DataType="vm:GarmentCreatorViewModel" Icon="/Assets/icon.ico"
+        Title="{Binding Title}" Width="1180" Height="800" WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBrush}">
+  <Window.Styles>
+    <Style Selector="ListBox.types ListBoxItem">
+      <Setter Property="Padding" Value="10,8" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+    </Style>
+    <Style Selector="ListBox.types ListBoxItem:selected">
+      <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+    </Style>
+    <Style Selector="ListBox.types ListBoxItem:disabled">
+      <Setter Property="Opacity" Value="0.5" />
+    </Style>
+  </Window.Styles>
+
+  <Window.DataTemplates>
+    <DataTemplate DataType="vm:CapDesignerViewModel">
+      <app:CapDesignerPanel />
+    </DataTemplate>
+    <DataTemplate DataType="vm:ShirtDesignerViewModel">
+      <app:ShirtDesignerPanel />
+    </DataTemplate>
+  </Window.DataTemplates>
+
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Classes="bar" BorderThickness="0,1,0,0" Padding="12,8">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+          <Button Classes="flat" Click="OnCancel">
+            <ui:IconLabel Icon="{StaticResource Icon.X}" Text="Cancelar" />
+          </Button>
+          <Button Classes="accent" IsVisible="{Binding Current.IsNew}" Command="{Binding Current.CreateCommand}">
+            <ui:IconLabel Icon="{StaticResource Icon.Check}" Text="Crear" />
+          </Button>
+          <Button IsVisible="{Binding Current.IsEditing}" Command="{Binding Current.AddColoursCommand}"
+                  ToolTip.Tip="Añade otra variación de color (b, c…) con estos colores; las que ya tienes no cambian">
+            <ui:IconLabel Icon="{StaticResource Icon.Palette}" Text="Guardar colores como textura nueva" />
+          </Button>
+          <Button Classes="accent" IsVisible="{Binding Current.IsEditing}" Command="{Binding Current.ReshapeCommand}"
+                  ToolTip.Tip="Cambia el modelo; todas las texturas, también las editadas, siguen encajando">
+            <ui:IconLabel Icon="{StaticResource Icon.Check}" Text="Aplicar forma" />
+          </Button>
+        </StackPanel>
+        <TextBlock Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding Current.PreviewError}" />
+      </DockPanel>
+    </Border>
+
+    <Grid ColumnDefinitions="370,1,*">
+      <Border Classes="panel">
+        <ScrollViewer>
+          <StackPanel Margin="0,10,0,0">
+            <Border Classes="card" IsVisible="{Binding ShowsTypes}">
+              <StackPanel>
+                <ui:IconLabel Classes="section" Icon="{StaticResource Icon.WandSparkles}" Text="¿QUÉ QUIERES CREAR?" />
+                <ListBox Classes="types" ItemsSource="{Binding Types}" SelectedItem="{Binding SelectedType}">
+                  <ListBox.ItemContainerTheme>
+                    <ControlTheme TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}" x:DataType="vm:GarmentTypeOption">
+                      <Setter Property="IsEnabled" Value="{Binding Available}" />
+                    </ControlTheme>
+                  </ListBox.ItemContainerTheme>
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GarmentTypeOption">
+                      <DockPanel>
+                        <Border DockPanel.Dock="Right" Classes="chip" IsVisible="{Binding ComingSoon}">
+                          <TextBlock Text="PRONTO" />
+                        </Border>
+                        <ui:Icon DockPanel.Dock="Left" Size="20" Margin="0,0,12,0" Foreground="{StaticResource AccentBrush}"
+                                 Data="{Binding Icon, Converter={x:Static ui:IconConverter.Instance}}" />
+                        <StackPanel>
+                          <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                          <TextBlock Classes="muted" FontSize="11" Text="{Binding Hint}" />
+                        </StackPanel>
+                      </DockPanel>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card" IsVisible="{Binding Current.IsNew}">
+              <StackPanel>
+                <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Shirt}" Text="PRENDA" />
+                <TextBlock Classes="label" Text="Nombre" />
+                <TextBox Text="{Binding Current.Name}" />
+                <TextBlock Classes="label" Text="Género" />
+                <ComboBox ItemsSource="{x:Static vm:GenderOption.All}" SelectedItem="{Binding Current.Gender}" HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GenderOption">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+              </StackPanel>
+            </Border>
+
+            <ContentControl Content="{Binding Current}" />
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+
+      <GridSplitter Grid.Column="1" />
+
+      <Panel Grid.Column="2">
+        <viewer:MeshViewport x:Name="Viewport" />
+        <Border Classes="overlay" HorizontalAlignment="Left" VerticalAlignment="Top">
+          <ui:IconLabel Classes="section" Margin="0" Icon="{StaticResource Icon.Eye}" Text="VISTA PREVIA" />
+        </Border>
+      </Panel>
+    </Grid>
+  </DockPanel>
+</Window>

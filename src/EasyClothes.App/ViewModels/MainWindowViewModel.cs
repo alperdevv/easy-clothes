@@ -390,6 +390,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     }
 
     public CapTemplates CapTemplates { get; set; } = new(CapTemplates.DefaultFolder);
+    public ShirtTemplates ShirtTemplates { get; set; } = new(ShirtTemplates.DefaultFolder);
 
     // The MCP server ships next to the app, so Claude can work on projects directly.
     public string McpServerPath { get; set; } = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "EasyClothes.Mcp.exe" : "EasyClothes.Mcp");
@@ -617,39 +618,80 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     }
 
     [RelayCommand(CanExecute = nameof(CanImport))]
-    private async Task NewCapAsync()
+    private async Task NewGarmentAsync()
     {
         var gender = Selected?.Model.Gender ?? PedGender.Male;
-        var designer = new CapDesignerViewModel(new CapDesign(), gender, editing: false, CapStageFor, CapTemplates);
-        await dialogs.DesignCapAsync(designer);
-        if (designer.Action != CapDesignerAction.Create) return;
+        var creator = new GarmentCreatorViewModel(GarmentKind.Shirt, NewDesigner, gender);
+        await dialogs.CreateGarmentAsync(creator);
+        var designer = creator.Current;
+        if (designer.Action != DesignerAction.Create) return;
 
         EnsureProject();
-        var name = string.IsNullOrWhiteSpace(designer.Name) ? "Gorra" : designer.Name.Trim();
-        if (await RunCapJobAsync(() => CapGarment.Create(Project!, ProjectDir!, designer.Design, designer.Gender.Value, name)) is not { } cap) return;
+        var name = string.IsNullOrWhiteSpace(designer.Name) ? GarmentCreatorViewModel.DefaultName(GarmentCreatorViewModel.KindOf(designer)) : designer.Name.Trim();
+        var garment = designer switch
+        {
+            ShirtDesignerViewModel { Torso: { } torso } shirt =>
+                await RunGarmentJobAsync(() => ShirtGarment.Create(Project!, ProjectDir!, shirt.Design, shirt.Gender.Value, torso, name, shirt.MoreColours)),
+            CapDesignerViewModel cap => await RunGarmentJobAsync(() => CapGarment.Create(Project!, ProjectDir!, cap.Design, cap.Gender.Value, name)),
+            _ => null,
+        };
+        if (garment is null) return;
         MarkChanged(rebuildTree: true);
-        Select(cap.Id);
-        Status = $"{cap.Name} creada. Edita su textura para añadir logos, o pulsa «Editar gorra» para cambiar forma y colores.";
+        Select(garment.Id);
+        Status = $"{garment.Name}: creada. Edita su textura para añadir logos, o pulsa «Editar prenda» para cambiar forma y colores.";
     }
 
-    [RelayCommand]
-    private async Task EditCapAsync()
+    private IGarmentDesigner NewDesigner(GarmentKind kind, PedGender gender) => kind switch
     {
-        if (Selected is not { Model.Cap: { } design } selected) return;
-        var designer = new CapDesignerViewModel(design, selected.Model.Gender, editing: true, CapStageFor, CapTemplates);
-        await dialogs.DesignCapAsync(designer);
+        GarmentKind.Shirt => new ShirtDesignerViewModel(new ShirtDesign(), gender, editing: false, ShirtServices()),
+        _ => new CapDesignerViewModel(new CapDesign(), gender, editing: false, CapStageFor, CapTemplates),
+    };
+
+    // Pictures picked in the designer are absolute; those already in a garment are relative to the project.
+    private ShirtDesignerServices ShirtServices() => new(
+        ShirtStageFor,
+        ShirtTemplates,
+        async () => (await dialogs.PickFilesAsync("Imagen para estampar", "Imágenes", ["*.png", "*.ytd"], multiple: false)).FirstOrDefault(),
+        path => ShirtGarment.LoadGraphic(ProjectDir ?? "", path));
+
+    [RelayCommand]
+    private async Task EditGarmentAsync()
+    {
+        if (Selected is not { } selected) return;
         var drawable = selected.Model;
+        IGarmentDesigner? designer = drawable switch
+        {
+            { Cap: { } cap } => new CapDesignerViewModel(cap, drawable.Gender, editing: true, CapStageFor, CapTemplates),
+            { Shirt: { } shirt } => new ShirtDesignerViewModel(shirt, drawable.Gender, editing: true, ShirtServices()),
+            _ => null,
+        };
+        if (designer is null) return;
+        await dialogs.CreateGarmentAsync(new GarmentCreatorViewModel(designer));
+
         switch (designer.Action)
         {
-            case CapDesignerAction.Reshape:
-                if (await RunCapJobAsync(() => CapGarment.Reshape(ProjectDir!, drawable, designer.Design)) is not { } backup) return;
+            case DesignerAction.Reshape:
+                var backup = designer switch
+                {
+                    ShirtDesignerViewModel { Torso: { } torso } shirt => await RunGarmentJobAsync(() => ShirtGarment.Reshape(ProjectDir!, drawable, shirt.Design, torso)),
+                    CapDesignerViewModel cap => await RunGarmentJobAsync(() => CapGarment.Reshape(ProjectDir!, drawable, cap.Design)),
+                    _ => null,
+                };
+                if (backup is null) return;
                 Status = $"Forma de {drawable.Name} actualizada; el modelo anterior está en {backup}.";
                 break;
-            case CapDesignerAction.AddColours:
-                if (await RunCapJobAsync(() => (int?)CapGarment.AddColourway(ProjectDir!, drawable, designer.Design.Colours)) is not { } index) return;
+            case DesignerAction.AddColours:
+                var index = designer switch
+                {
+                    ShirtDesignerViewModel { Torso: { } torso } shirt =>
+                        await RunGarmentJobAsync(() => (int?)ShirtGarment.AddColourway(ProjectDir!, drawable, shirt.Look, torso)),
+                    CapDesignerViewModel cap => await RunGarmentJobAsync(() => (int?)CapGarment.AddColourway(ProjectDir!, drawable, cap.Design.Colours)),
+                    _ => null,
+                };
+                if (index is not { } added) return;
                 selected.RefreshTextures();
-                SelectedTexture = selected.Textures[index];
-                Status = $"Textura {TextureVariation.LetterFor(index)} añadida a {drawable.Name}.";
+                SelectedTexture = selected.Textures[added];
+                Status = $"Textura {TextureVariation.LetterFor(added)} añadida a {drawable.Name}.";
                 break;
             default:
                 return;
@@ -676,7 +718,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         EnsureProject();
         var name = string.IsNullOrWhiteSpace(placement.Name) ? "Modelo" : placement.Name.Trim();
         var source = files[0];
-        if (await RunCapJobAsync(() => ObjProp.Create(Project!, ProjectDir!, source, placement.TexturePath, placement.Slot.Value, placement.Gender.Value, name, placement.Placement)) is not { } prop) return;
+        if (await RunGarmentJobAsync(() => ObjProp.Create(Project!, ProjectDir!, source, placement.TexturePath, placement.Slot.Value, placement.Gender.Value, name, placement.Placement)) is not { } prop) return;
         MarkChanged(rebuildTree: true);
         Select(prop.Id);
         Status = string.Join(" ", new[] { $"{prop.Name} importado como accesorio." }.Concat(model.Warnings));
@@ -693,7 +735,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         await dialogs.PlaceModelAsync(placement);
         if (!placement.Confirmed) return;
         var drawable = selected.Model;
-        if (await RunCapJobAsync(() => ObjProp.Replace(ProjectDir!, drawable, placement.Placement)) is not { } backup) return;
+        if (await RunGarmentJobAsync(() => ObjProp.Replace(ProjectDir!, drawable, placement.Placement)) is not { } backup) return;
         MarkChanged(rebuildTree: false);
         _ = LoadPreviewAsync();
         Status = $"{drawable.Name} recolocado; el modelo anterior está en {backup}.";
@@ -744,7 +786,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
     }
 
-    private async Task<T?> RunCapJobAsync<T>(Func<T> job)
+    private async Task<T?> RunGarmentJobAsync<T>(Func<T> job)
     {
         IsBusy = true;
         try
@@ -753,13 +795,22 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            Status = $"No se pudo guardar la gorra: {ex.Message}";
+            Status = $"No se pudo guardar la prenda: {ex.Message}";
             return default;
         }
         finally
         {
             IsBusy = false;
         }
+    }
+
+    // Runs off the UI thread while the designer previews. A shirt is cut from the body, so the body is
+    // loaded even when the mannequin is hidden.
+    private ShirtStage ShirtStageFor(PedGender gender)
+    {
+        if (Settings.BaseBodyFolder is not { } folder || BaseBody.ResolveRoot(folder) is not { } root) return new ShirtStage([], null);
+        var mannequin = ShowBody ? LoadBody(BaseBody.Parts(root, gender, ComponentSlot.Top)) : [];
+        return new ShirtStage(mannequin, BaseBody.Torso(root, gender));
     }
 
     // Runs off the UI thread while the designer previews.

@@ -58,6 +58,8 @@ public sealed partial class DrawableViewModel(Drawable model, Action<DrawableVie
     public bool IsShoes => Model.Component == ComponentSlot.Shoes && !Model.Reserved;
     public bool IsHat => Model.Prop == PropSlot.Hat && !Model.Reserved;
     public bool IsGeneratedCap => Model.Cap is not null && IsHat;
+    public bool IsGeneratedShirt => Model.Shirt is not null && Model.Component == ComponentSlot.Top && !Model.Reserved;
+    public bool IsGenerated => IsGeneratedCap || IsGeneratedShirt;
     public bool IsImportedModel => Model.Imported is not null && !Model.Reserved;
 
     public string FirstPersonLabel => Model.FirstPersonModelPath is { } path ? ShortName(path) : "Ninguno";

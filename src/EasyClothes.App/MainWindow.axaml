@@ -102,9 +102,9 @@
                 </MenuFlyout>
               </DropDownButton.Flyout>
             </DropDownButton>
-            <Button Classes="flat" Command="{Binding NewCapCommand}"
-                    ToolTip.Tip="Crear desde cero una gorra, bucket, gorro de lana o visera: eliges modelo, forma y colores y lo puedes cambiar cuando quieras">
-              <ui:IconLabel Icon="{StaticResource Icon.WandSparkles}" Text="Nueva gorra" />
+            <Button Classes="flat" Command="{Binding NewGarmentCommand}"
+                    ToolTip.Tip="Crear ropa desde cero sin Blender: camisetas, gorras y gorros. Eliges forma y colores y los puedes cambiar cuando quieras">
+              <ui:IconLabel Icon="{StaticResource Icon.WandSparkles}" Text="Crear prenda" />
             </Button>
             <Button Classes="flat square danger" Command="{Binding RemoveCommand}" ToolTip.Tip="Eliminar la prenda o el tatuaje seleccionado">
               <ui:Icon Data="{StaticResource Icon.Trash2}" />
@@ -319,10 +319,10 @@
                         Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).PlaceImportedModelCommand}">
                   <ui:IconLabel Icon="{StaticResource Icon.Move3d}" Text="Colocar modelo importado…" />
                 </Button>
-                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,10,0,0" IsVisible="{Binding IsGeneratedCap}"
+                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,10,0,0" IsVisible="{Binding IsGenerated}"
                         ToolTip.Tip="Cambiar la forma (las texturas siguen encajando) o crear otra textura con otros colores"
-                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).EditCapCommand}">
-                  <ui:IconLabel Icon="{StaticResource Icon.WandSparkles}" Text="Editar gorra…" />
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).EditGarmentCommand}">
+                  <ui:IconLabel Icon="{StaticResource Icon.WandSparkles}" Text="Editar prenda…" />
                 </Button>
                 <StackPanel IsVisible="{Binding IsHat}" Spacing="2" Margin="0,8,0,0">
                   <TextBlock Classes="label" Text="Pelo bajo el sombrero" />

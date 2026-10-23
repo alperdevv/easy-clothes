@@ -60,6 +60,8 @@ public class SampleFilesTests
                             || g.Mesh!.VertexCount != g.Vertices || g.Mesh.Indices.Length != g.Indices
                             || g.Mesh.Positions.Any(p => !float.IsFinite(p) || Math.Abs(p) > 10))
                             failures.Add($"{path}: {d.Name} geometry {g}");
+                        if (g.Mesh?.BlendWeights is { } weights && weights.Chunk(4).Any(w => Math.Abs(w.Sum(x => x) - 255) > 3))
+                            failures.Add($"{path}: {d.Name} has bone weights that don't add up");
                     }
                 }
             }

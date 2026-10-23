@@ -10,6 +10,12 @@ public sealed class MeshData
     public required float[] TexCoords { get; init; }
     public required ushort[] Indices { get; init; }
 
+    // Skinned meshes: four weights (summing to 255) and four skeleton bone indices per vertex, paired by position.
+    public byte[]? BlendWeights { get; init; }
+    public byte[]? BlendIndices { get; init; }
+
+    public bool IsSkinned => BlendWeights is not null && BlendIndices is not null;
+
     public int VertexCount => Positions.Length / 3;
     public int TriangleCount => Indices.Length / 3;
 
@@ -25,7 +31,31 @@ public sealed class MeshData
             p.CopyTo(positions, i);
             n.CopyTo(normals, i);
         }
-        return new MeshData { Positions = positions, Normals = normals, TexCoords = TexCoords, Indices = Indices };
+        return new MeshData
+        {
+            Positions = positions, Normals = normals, TexCoords = TexCoords, Indices = Indices,
+            BlendWeights = BlendWeights, BlendIndices = BlendIndices,
+        };
+    }
+
+    // One mesh from several, e.g. the geometries of a model; skinning is kept only if every part has it.
+    public static MeshData Merge(IReadOnlyList<MeshData> parts)
+    {
+        if (parts.Count == 0) throw new InvalidDataException("There is no geometry to merge.");
+        var skinned = parts.All(p => p.IsSkinned);
+        var offsets = new int[parts.Count];
+        for (var i = 1; i < parts.Count; i++) offsets[i] = offsets[i - 1] + parts[i - 1].VertexCount;
+        if (offsets[^1] + parts[^1].VertexCount > ushort.MaxValue)
+            throw new InvalidDataException("The merged geometry has too many vertices for 16-bit indices.");
+        return new MeshData
+        {
+            Positions = parts.SelectMany(p => p.Positions).ToArray(),
+            Normals = parts.SelectMany(p => p.Normals).ToArray(),
+            TexCoords = parts.SelectMany(p => p.TexCoords).ToArray(),
+            Indices = parts.SelectMany((p, i) => p.Indices.Select(index => (ushort)(index + offsets[i]))).ToArray(),
+            BlendWeights = skinned ? parts.SelectMany(p => p.BlendWeights!).ToArray() : null,
+            BlendIndices = skinned ? parts.SelectMany(p => p.BlendIndices!).ToArray() : null,
+        };
     }
 
     // OpenGL ES (ANGLE on Windows) has no polygon mode, so wireframe is drawn as a line list.
@@ -48,7 +78,9 @@ public sealed class MeshData
         return lines.ToArray();
     }
 
-    internal static MeshData Decode(ReadOnlySpan<byte> vertices, int count, VertexDeclaration decl, ReadOnlySpan<byte> indexBytes)
+    // boneIds maps the geometry's bone slots to skeleton bones; the game's ped files use the identity.
+    internal static MeshData Decode(ReadOnlySpan<byte> vertices, int count, VertexDeclaration decl, ReadOnlySpan<byte> indexBytes,
+        IReadOnlyList<ushort>? boneIds = null)
     {
         if (!decl.Has(VertexSemantic.Position) || decl.TypeOf(VertexSemantic.Position) != VertexComponentType.Float3)
             throw new InvalidDataException("Geometry has no Float3 position stream.");
@@ -60,6 +92,9 @@ public sealed class MeshData
         var nrm = decl.TypeOf(VertexSemantic.Normal) == VertexComponentType.Float3 ? decl.OffsetOf(VertexSemantic.Normal) : -1;
         var uv = decl.OffsetOf(VertexSemantic.TexCoord0);
         var uvType = uv >= 0 ? decl.TypeOf(VertexSemantic.TexCoord0) : default;
+        var skinned = decl.Has(VertexSemantic.BlendWeights) && decl.Has(VertexSemantic.BlendIndices);
+        var weights = skinned ? new byte[count * 4] : null;
+        var bones = skinned ? new byte[count * 4] : null;
 
         for (var v = 0; v < count; v++)
         {
@@ -68,6 +103,15 @@ public sealed class MeshData
             {
                 positions[v * 3 + c] = ReadFloat(vertex, pos + c * 4);
                 if (nrm >= 0) normals[v * 3 + c] = ReadFloat(vertex, nrm + c * 4);
+            }
+            if (skinned)
+            {
+                vertex.Slice(decl.OffsetOf(VertexSemantic.BlendWeights), 4).CopyTo(weights.AsSpan(v * 4));
+                for (var k = 0; k < 4; k++)
+                {
+                    var slot = vertex[decl.OffsetOf(VertexSemantic.BlendIndices) + k];
+                    bones![v * 4 + k] = boneIds is { } ids && slot < ids.Count ? (byte)Math.Min(ids[slot], (ushort)255) : slot;
+                }
             }
             switch (uvType)
             {
@@ -90,7 +134,7 @@ public sealed class MeshData
                 throw new InvalidDataException($"Index {indices[i]} out of range for {count} vertices.");
         }
 
-        return new MeshData { Positions = positions, Normals = normals, TexCoords = uvs, Indices = indices };
+        return new MeshData { Positions = positions, Normals = normals, TexCoords = uvs, Indices = indices, BlendWeights = weights, BlendIndices = bones };
     }
 
     private static float ReadFloat(ReadOnlySpan<byte> data, int offset) =>

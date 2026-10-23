@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <ApplicationIcon>..\EasyClothes.App\Assets\icon.ico</ApplicationIcon>
+    <AssemblyTitle>EasyClothes para Claude</AssemblyTitle>
+    <Description>Servidor MCP de EasyClothes para Claude Desktop y Claude Code</Description>
   </PropertyGroup>
 
   <ItemGroup>

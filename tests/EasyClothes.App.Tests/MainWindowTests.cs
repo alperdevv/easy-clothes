@@ -442,8 +442,10 @@ public sealed class MainWindowTests : IDisposable
         await window.ViewModel.OpenProjectFileAsync(path);
 
         window.ViewModel.CapTemplates = new EasyClothes.Core.Modeling.CapTemplates(Path.Combine(_dir, "plantillas"));
-        var creating = window.ViewModel.NewCapCommand.ExecuteAsync(null);
-        var designer = await OpenedDesigner(window);
+        var creating = window.ViewModel.NewGarmentCommand.ExecuteAsync(null);
+        var creator = await OpenedCreator(window);
+        creator.SelectedType = GarmentTypeOption.All.Single(t => t.Kind == GarmentKind.Cap);
+        var designer = (CapDesignerViewModel)creator.Current;
         Assert.Empty(designer.Templates);
         designer.Name = "Snapback";
         designer.VisorLength = 5;
@@ -464,8 +466,10 @@ public sealed class MainWindowTests : IDisposable
         Assert.True(cap.IsGeneratedCap);
         Assert.True(File.Exists(Path.Combine(_dir, cap.Model.ModelPath)));
 
-        var editing = window.ViewModel.EditCapCommand.ExecuteAsync(null);
-        designer = await OpenedDesigner(window);
+        var editing = window.ViewModel.EditGarmentCommand.ExecuteAsync(null);
+        creator = await OpenedCreator(window);
+        Assert.False(creator.ShowsTypes);
+        designer = (CapDesignerViewModel)creator.Current;
         Assert.True(designer.IsEditing);
         designer.CrownColor = Avalonia.Media.Colors.Red;
         designer.AddColoursCommand.Execute(null);
@@ -475,10 +479,65 @@ public sealed class MainWindowTests : IDisposable
         Assert.Equal("b", window.ViewModel.SelectedTexture!.Letter);
     }
 
-    private static async Task<CapDesignerViewModel> OpenedDesigner(MainWindow window)
+    [AvaloniaFact]
+    public async Task The_creator_starts_with_a_shirt_and_explains_it_needs_the_exported_body()
     {
-        await WaitUntil(() => window.OwnedWindows.OfType<CapDesignerWindow>().Any());
-        return (CapDesignerViewModel)window.OwnedWindows.OfType<CapDesignerWindow>().Single().DataContext!;
+        var window = new MainWindow();
+        window.Show();
+        window.ViewModel.Settings = new();
+
+        var creating = window.ViewModel.NewGarmentCommand.ExecuteAsync(null);
+        var creator = await OpenedCreator(window);
+        var shirt = Assert.IsType<ShirtDesignerViewModel>(creator.Current);
+        await WaitUntil(() => shirt.PreviewError is not null);
+        Assert.False(shirt.CreateCommand.CanExecute(null));
+
+        shirt.Name = "Mi prenda";
+        creator.SelectedType = GarmentTypeOption.All.Single(t => t.Kind == GarmentKind.Cap);
+        Assert.Equal("Mi prenda", creator.Current.Name);
+        creator.SelectedType = GarmentTypeOption.All.Single(t => t.Kind == GarmentKind.Shoes);
+        Assert.IsType<CapDesignerViewModel>(creator.Current);
+        window.OwnedWindows.OfType<GarmentCreatorWindow>().Single().Close();
+        await creating;
+        Assert.Null(window.ViewModel.Project);
+    }
+
+    // Set EASYCLOTHES_BODY to the folder with the exported freemode peds to make a shirt end to end.
+    [AvaloniaFact]
+    public async Task A_shirt_is_cut_from_the_body_created_and_reshaped()
+    {
+        if (Environment.GetEnvironmentVariable("EASYCLOTHES_BODY") is not { } body) return;
+        var window = new MainWindow();
+        window.Show();
+        window.ViewModel.SettingsPath = Path.Combine(_dir, "settings.json");
+        window.ViewModel.Settings = new();
+        window.ViewModel.DraftsRoot = Path.Combine(_dir, "drafts");
+        Assert.True(window.ViewModel.SetBodyFolder(body));
+
+        var creating = window.ViewModel.NewGarmentCommand.ExecuteAsync(null);
+        var shirt = (ShirtDesignerViewModel)(await OpenedCreator(window)).Current;
+        shirt.Style = ShirtStyleOption.For(EasyClothes.Core.Modeling.ShirtStyle.LongSleeve);
+        await WaitUntil(() => shirt.Preview is not null && shirt.Torso is not null);
+        shirt.CreateCommand.Execute(null);
+        await creating;
+
+        var created = window.ViewModel.Selected!;
+        Assert.Equal(("Camiseta manga larga", ComponentSlot.Top, 1f), (created.Name, created.Model.Component!.Value, created.Model.Shirt!.Sleeve));
+        Assert.True(created.IsGenerated);
+
+        var editing = window.ViewModel.EditGarmentCommand.ExecuteAsync(null);
+        shirt = (ShirtDesignerViewModel)(await OpenedCreator(window)).Current;
+        shirt.Sleeve = 0.3;
+        await WaitUntil(() => shirt.Torso is not null);
+        shirt.ReshapeCommand.Execute(null);
+        await editing;
+        Assert.Equal(0.3f, created.Model.Shirt!.Sleeve, 3);
+    }
+
+    private static async Task<GarmentCreatorViewModel> OpenedCreator(MainWindow window)
+    {
+        await WaitUntil(() => window.OwnedWindows.OfType<GarmentCreatorWindow>().Any());
+        return (GarmentCreatorViewModel)window.OwnedWindows.OfType<GarmentCreatorWindow>().Single().DataContext!;
     }
 
     private static async Task WaitUntil(Func<bool> condition)

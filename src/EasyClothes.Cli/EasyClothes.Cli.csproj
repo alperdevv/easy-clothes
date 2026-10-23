@@ -3,6 +3,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <AssemblyName>easyclothes</AssemblyName>
+    <AssemblyTitle>EasyClothes CLI</AssemblyTitle>
+    <Description>EasyClothes por línea de comandos</Description>
   </PropertyGroup>
 
   <ItemGroup>

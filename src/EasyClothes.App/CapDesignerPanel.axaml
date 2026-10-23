@@ -1,0 +1,203 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:EasyClothes.App.Controls"
+             xmlns:vm="using:EasyClothes.App.ViewModels"
+             xmlns:core="using:EasyClothes.Core.Modeling"
+             x:Class="EasyClothes.App.CapDesignerPanel"
+             x:DataType="vm:CapDesignerViewModel">
+  <UserControl.Styles>
+    <Style Selector="Grid.row">
+      <Setter Property="Margin" Value="0,2" />
+    </Style>
+    <Style Selector="Grid.row > TextBlock.value">
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="ColorPicker">
+      <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel>
+    <Border Classes="card">
+      <StackPanel Spacing="4">
+        <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Bookmark}" Text="MIS PLANTILLAS" />
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="flat square danger" Margin="2,0,0,0" Command="{Binding DeleteTemplateCommand}" ToolTip.Tip="Borrar la plantilla">
+            <ui:Icon Size="15" Data="{StaticResource Icon.Trash2}" />
+          </Button>
+          <Button DockPanel.Dock="Right" Classes="small" Content="Usar" Margin="4,0,0,0" Command="{Binding UseTemplateCommand}"
+                  ToolTip.Tip="Carga la forma y los colores de la plantilla" />
+          <ComboBox ItemsSource="{Binding Templates}" SelectedItem="{Binding SelectedTemplate}" HorizontalAlignment="Stretch"
+                    PlaceholderText="Aún no tienes plantillas">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="core:CapTemplate">
+                <TextBlock Text="{Binding Name}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </DockPanel>
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="small" Margin="4,0,0,0" Command="{Binding SaveTemplateCommand}"
+                  ToolTip.Tip="Guarda la forma y los colores actuales para usarlos en otras prendas">
+            <ui:IconLabel Icon="{StaticResource Icon.Save}" IconSize="14" Spacing="5" Text="Guardar diseño" />
+          </Button>
+          <TextBox Text="{Binding TemplateName}" PlaceholderText="Nombre de la plantilla" />
+        </DockPanel>
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding TemplateNote}" IsVisible="{Binding TemplateNote, Converter={x:Static ObjectConverters.IsNotNull}}" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card">
+      <StackPanel>
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Classes="flat small" Command="{Binding ResetShapeCommand}" ToolTip.Tip="Vuelve a la forma de partida sin tocar los colores">
+            <ui:IconLabel Icon="{StaticResource Icon.RotateCcw}" IconSize="13" Spacing="5" Text="Restablecer" />
+          </Button>
+          <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Shapes}" Text="FORMA" />
+        </DockPanel>
+        <TextBlock Classes="label" Text="Modelo" />
+        <ComboBox ItemsSource="{Binding StyleOptions}" SelectedItem="{Binding Style}" HorizontalAlignment="Stretch"
+                  ToolTip.Tip="Carga la forma típica de cada modelo; luego puedes ajustarla con los controles">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:CapStyleOption">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+        <Grid Classes="row" ColumnDefinitions="*,Auto" Margin="0,8,0,0">
+          <TextBlock Classes="label" Text="Giro" />
+          <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Rotation, StringFormat={}{0:0}°}" />
+        </Grid>
+        <Slider Minimum="-180" Maximum="180" Value="{Binding Rotation}" ToolTip.Tip="Hacia dónde mira la parte delantera: 0 delante, 90 a la izquierda, -90 a la derecha, 180 del revés" />
+        <UniformGrid Columns="4" Margin="0,0,0,6">
+          <Button Classes="small" Content="Delante" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding TurnCommand}" CommandParameter="0" />
+          <Button Classes="small" Content="Izquierda" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding TurnCommand}" CommandParameter="90" Margin="4,0,0,0" />
+          <Button Classes="small" Content="Derecha" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding TurnCommand}" CommandParameter="-90" Margin="4,0,0,0" />
+          <Button Classes="small" Content="Del revés" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Command="{Binding TurnCommand}" CommandParameter="180" Margin="4,0,0,0" />
+        </UniformGrid>
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <TextBlock Classes="label" Text="Talla" />
+          <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Size, StringFormat={}{0:0.00}}" />
+        </Grid>
+        <Slider Minimum="0.95" Maximum="1.1" Value="{Binding Size}" ToolTip.Tip="Lo ajustada que queda a la cabeza" />
+
+        <StackPanel IsVisible="{Binding HasCrown}">
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Alto" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding CrownHeight, StringFormat={}{0:0.0} cm}" />
+          </Grid>
+          <Slider Minimum="{Binding MinCrownHeight}" Maximum="16" Value="{Binding CrownHeight}" ToolTip.Tip="Desde la banda hasta arriba; el mínimo es el que tapa la cabeza" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Forma" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="redondeada ↔ estructurada" />
+          </Grid>
+          <Slider Minimum="0" Maximum="1" Value="{Binding CrownShape}" />
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding HasVisor}">
+          <TextBlock Classes="label" Text="Tipo de visera" Margin="0,8,0,2" />
+          <ItemsControl ItemsSource="{x:Static vm:VisorPresetOption.All}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <UniformGrid Columns="5" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:VisorPresetOption">
+                <Button Classes="small" Content="{Binding Label}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,4,0"
+                        Command="{Binding $parent[UserControl].((vm:CapDesignerViewModel)DataContext).VisorPresetCommand}" CommandParameter="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Largo de la visera" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding VisorLength, StringFormat={}{0:0.0} cm}" />
+          </Grid>
+          <Slider Minimum="0" Maximum="10" Value="{Binding VisorLength}" ToolTip.Tip="A 0 no tiene visera" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Curva de la visera" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="plana ↔ curvada" />
+          </Grid>
+          <Slider Minimum="0" Maximum="1" Value="{Binding VisorCurve}" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Inclinación de la visera" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding VisorAngle, StringFormat={}{0:0}°}" />
+          </Grid>
+          <Slider Minimum="-10" Maximum="30" Value="{Binding VisorAngle}" ToolTip.Tip="Grados hacia abajo desde la horizontal" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Ancho de la visera" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="estrecha ↔ ancha" />
+          </Grid>
+          <Slider Minimum="0" Maximum="1" Value="{Binding VisorWidth}" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Forma de la visera" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="redondeada ↔ cuadrada" />
+          </Grid>
+          <Slider Minimum="0" Maximum="1" Value="{Binding VisorSquare}" />
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding IsBucket}">
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Ancho del ala" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding BrimWidth, StringFormat={}{0:0.0} cm}" />
+          </Grid>
+          <Slider Minimum="3" Maximum="9" Value="{Binding BrimWidth}" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Caída del ala" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding BrimDroop, StringFormat={}{0:0}°}" />
+          </Grid>
+          <Slider Minimum="0" Maximum="45" Value="{Binding BrimDroop}" />
+        </StackPanel>
+
+        <StackPanel IsVisible="{Binding IsBeanie}">
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Doblez" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding CuffHeight, StringFormat={}{0:0.0} cm}" />
+          </Grid>
+          <Slider Minimum="0" Maximum="8" Value="{Binding CuffHeight}" ToolTip.Tip="A 0 el gorro no tiene doblez" />
+          <CheckBox Content="Pompón" IsChecked="{Binding Pompom}" Margin="0,6,0,0" />
+        </StackPanel>
+
+        <CheckBox Content="Botón arriba" IsChecked="{Binding Button}" Margin="0,6,0,0" IsVisible="{Binding IsCap}" />
+      </StackPanel>
+    </Border>
+
+    <Border Classes="card">
+      <StackPanel>
+        <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Palette}" Text="COLORES" />
+        <Grid Classes="row" ColumnDefinitions="*,Auto">
+          <TextBlock Classes="label" Text="{Binding CrownLabel}" VerticalAlignment="Center" />
+          <ColorPicker Grid.Column="1" Color="{Binding CrownColor}" IsAlphaVisible="False" />
+        </Grid>
+        <Grid Classes="row" ColumnDefinitions="*,Auto" IsVisible="{Binding HasFrontColour}">
+          <TextBlock Classes="label" Text="{Binding FrontLabel}" VerticalAlignment="Center" />
+          <ColorPicker Grid.Column="1" Color="{Binding FrontColor}" IsAlphaVisible="False" />
+        </Grid>
+        <StackPanel IsVisible="{Binding !IsBeanie}">
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="{Binding VisorLabel}" VerticalAlignment="Center" />
+            <ColorPicker Grid.Column="1" Color="{Binding VisorColor}" IsAlphaVisible="False" />
+          </Grid>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="{Binding UnderVisorLabel}" VerticalAlignment="Center" />
+            <ColorPicker Grid.Column="1" Color="{Binding UnderVisorColor}" IsAlphaVisible="False" />
+          </Grid>
+        </StackPanel>
+        <Grid Classes="row" ColumnDefinitions="*,Auto" IsVisible="{Binding HasButtonColour}">
+          <TextBlock Classes="label" Text="{Binding ButtonLabel}" VerticalAlignment="Center" />
+          <ColorPicker Grid.Column="1" Color="{Binding ButtonColor}" IsAlphaVisible="False" />
+        </Grid>
+        <Grid Classes="row" ColumnDefinitions="*,Auto" IsVisible="{Binding HasStitchColour}">
+          <TextBlock Classes="label" Text="Costuras" VerticalAlignment="Center" />
+          <ColorPicker Grid.Column="1" Color="{Binding StitchColor}" IsAlphaVisible="False" />
+        </Grid>
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">
+          <ui:Icon Classes="muted" Size="14" Data="{StaticResource Icon.Info}" VerticalAlignment="Top" Margin="0,1,0,0" />
+          <TextBlock Classes="muted" TextWrapping="Wrap" MaxWidth="280"
+                     Text="Para logos, dibujos o detalles, créala y edita su textura: la plantilla tiene una zona fija para cada parte." />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

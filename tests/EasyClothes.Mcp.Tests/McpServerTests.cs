@@ -72,7 +72,7 @@ public sealed class McpServerTests : IDisposable
 
         var tools = await client.ListToolsAsync();
         var readOnly = tools.Where(t => t.ProtocolTool.Annotations?.ReadOnlyHint == true).Select(t => t.Name).Order();
-        Assert.Equal(["find_projects", "get_garment", "get_project", "list_cap_templates", "render_garment", "render_uv_layout", "validate"], readOnly);
+        Assert.Equal(["find_projects", "get_garment", "get_project", "list_cap_templates", "list_shirt_templates", "render_garment", "render_uv_layout", "validate"], readOnly);
         Assert.True(tools.Single(t => t.Name == "remove_garment").ProtocolTool.Annotations?.DestructiveHint);
         Assert.All(tools, t => Assert.False(string.IsNullOrWhiteSpace(t.Description)));
 

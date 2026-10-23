@@ -75,9 +75,9 @@ public sealed class DialogService(TopLevel topLevel) : IDialogService
         if (topLevel is Window owner) await window.ShowDialog(owner);
     }
 
-    public async Task DesignCapAsync(ViewModels.CapDesignerViewModel designer)
+    public async Task CreateGarmentAsync(ViewModels.GarmentCreatorViewModel creator)
     {
-        var window = new CapDesignerWindow(designer);
+        var window = new GarmentCreatorWindow(creator);
         if (topLevel is Window owner) await window.ShowDialog(owner);
     }
 

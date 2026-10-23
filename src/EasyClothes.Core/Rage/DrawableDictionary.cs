@@ -37,6 +37,8 @@ public static class DrawableDictionary
     internal const ulong GeometryVertexBuffer = 0x18;
     internal const ulong GeometryIndexBuffer = 0x38;
     internal const ulong GeometryStride = 0x70;
+    internal const ulong GeometryBoneIds = 0x68;
+    internal const ulong GeometryBoneCount = 0x72;
 
     internal const ulong VertexBufferCount = 0x18;
     internal const ulong VertexBufferData = 0x20;
@@ -102,6 +104,10 @@ public static class DrawableDictionary
         var indexCount = (int)reader.UInt32(ib + IndexBufferCount);
         var indices = reader.At(reader.UInt64(ib + IndexBufferData), indexCount * 2);
 
-        return MeshData.Decode(vertices, vertexCount, decl, indices);
+        var boneIdsPointer = reader.UInt64(geometry + GeometryBoneIds);
+        var boneIds = Enumerable.Range(0, boneIdsPointer == 0 ? 0 : reader.UInt16(geometry + GeometryBoneCount))
+            .Select(i => reader.UInt16(boneIdsPointer + (ulong)(i * 2)))
+            .ToList();
+        return MeshData.Decode(vertices, vertexCount, decl, indices, boneIds);
     }
 }
