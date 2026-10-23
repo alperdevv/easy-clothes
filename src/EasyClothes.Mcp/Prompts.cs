@@ -13,6 +13,7 @@ public static class Prompts
         - Antes de generar, ejecuta validate; apply_fixes arregla texturas grandes, mipmaps y polígonos con copia de seguridad.
         - Mira el resultado con render_garment antes de dar algo por bueno. Para colocar logos usa render_uv_layout y luego edit_texture con coordenadas UV; prueba con save=false y guarda como variación nueva salvo que el usuario pida sobrescribir.
         - Para una gorra desde cero usa create_cap (modelo propio, no hace falta ningún mod) y update_cap para cambiar la forma o sacar otra combinación de colores; los logos van después con edit_texture.
+        - Para un accesorio hecho por el usuario en Blender usa import_model (.obj) y place_model para ajustarlo; export_reference_head le da la cabeza sobre la que modelar.
         - Todas las rutas aceptan formato Windows (D:\...) o WSL (/mnt/d/...). Cada cambio se guarda al momento con copia en .backups y la app, si está abierta, se recarga sola.
         """;
 

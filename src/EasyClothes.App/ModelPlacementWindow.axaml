@@ -1,0 +1,121 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:viewer="using:EasyClothes.App.Viewer"
+        xmlns:vm="using:EasyClothes.App.ViewModels"
+        x:Class="EasyClothes.App.ModelPlacementWindow"
+        x:DataType="vm:ModelPlacementViewModel" Icon="/Assets/icon.ico"
+        Title="{Binding Title}" Width="1100" Height="760" WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBrush}">
+  <Window.Styles>
+    <Style Selector="Grid.row">
+      <Setter Property="Margin" Value="0,2" />
+    </Style>
+    <Style Selector="Grid.row > TextBlock.value">
+      <Setter Property="HorizontalAlignment" Value="Right" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </Window.Styles>
+
+  <DockPanel>
+    <Border DockPanel.Dock="Bottom" Classes="bar" BorderThickness="0,1,0,0">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+          <Button Content="Cancelar" Click="OnCancel" />
+          <Button Content="Crear prenda" Classes="accent" IsVisible="{Binding IsNew}" Command="{Binding ConfirmCommand}" />
+          <Button Content="Aplicar" Classes="accent" IsVisible="{Binding IsEditing}" Command="{Binding ConfirmCommand}" />
+        </StackPanel>
+        <TextBlock Classes="muted" VerticalAlignment="Center" TextWrapping="Wrap" Text="{Binding Notes}" />
+      </DockPanel>
+    </Border>
+
+    <Grid ColumnDefinitions="340,4,*">
+      <ScrollViewer>
+        <StackPanel Classes="form">
+          <TextBlock Classes="muted" Text="{Binding Summary}" />
+          <StackPanel IsVisible="{Binding IsNew}">
+            <TextBlock Classes="label" Text="Nombre" />
+            <TextBox Text="{Binding Name}" />
+            <TextBlock Classes="label" Text="Género" />
+            <ComboBox ItemsSource="{x:Static vm:GenderOption.All}" SelectedItem="{Binding Gender}" HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:GenderOption">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Classes="label" Text="Tipo de accesorio" />
+            <ComboBox ItemsSource="{x:Static vm:PropSlotOption.All}" SelectedItem="{Binding Slot}" HorizontalAlignment="Stretch">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:PropSlotOption">
+                  <TextBlock Text="{Binding Label}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock Classes="label" Text="Textura" />
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Classes="small" Content="Elegir PNG…" Command="{Binding ChooseTextureCommand}" />
+              <TextBlock Classes="muted" Text="{Binding TextureLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+          </StackPanel>
+
+          <DockPanel Margin="0,12,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
+              <Button Classes="small" Content="Encajar" Command="{Binding FitCommand}"
+                      ToolTip.Tip="Corrige unidades (cm, mm) y lo coloca centrado sobre la cabeza" />
+              <Button Classes="small" Content="Original" Command="{Binding ResetCommand}"
+                      ToolTip.Tip="Tal cual viene en el .obj: lo correcto si lo modelaste sobre la cabeza de referencia" />
+            </StackPanel>
+            <TextBlock Classes="header" Text="COLOCACIÓN" Margin="0" />
+          </DockPanel>
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Arriba / abajo" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="cm" />
+          </Grid>
+          <NumericUpDown Value="{Binding Up}" Increment="0.5" FormatString="0.0" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Adelante / atrás" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="cm" />
+          </Grid>
+          <NumericUpDown Value="{Binding Forward}" Increment="0.5" FormatString="0.0" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Izquierda / derecha" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="cm, positivo a su izquierda" />
+          </Grid>
+          <NumericUpDown Value="{Binding Left}" Increment="0.5" FormatString="0.0" ToolTip.Tip="Positivo hacia la izquierda del personaje" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Giro" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Turn, StringFormat={}{0:0}°}" />
+          </Grid>
+          <Slider Minimum="-180" Maximum="180" Value="{Binding Turn}" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Inclinación adelante / atrás" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Nod, StringFormat={}{0:0}°}" />
+          </Grid>
+          <Slider Minimum="-45" Maximum="45" Value="{Binding Nod}" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Ladeo" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Tilt, StringFormat={}{0:0}°}" />
+          </Grid>
+          <Slider Minimum="-45" Maximum="45" Value="{Binding Tilt}" />
+          <Grid Classes="row" ColumnDefinitions="*,Auto">
+            <TextBlock Classes="label" Text="Escala" />
+            <TextBlock Grid.Column="1" Classes="muted value" Text="{Binding Scale, StringFormat={}{0:0.###}}" />
+          </Grid>
+          <NumericUpDown Value="{Binding Scale}" Increment="0.01" Minimum="0.0001" Maximum="100" FormatString="0.####" />
+
+          <TextBlock Classes="header" Text="MODELAR EN BLENDER" Margin="0,14,0,0" />
+          <TextBlock Classes="muted" TextWrapping="Wrap"
+                     Text="Exporta la cabeza del personaje, impórtala en Blender (.obj, ejes por defecto), modela encima y exporta tu modelo en .obj con los mismos ejes: entrará en su sitio con «Original»." />
+          <Button Content="Guardar cabeza de referencia (.obj)…" HorizontalAlignment="Stretch" Margin="0,6,0,0" Command="{Binding SaveReferenceHeadCommand}" />
+        </StackPanel>
+      </ScrollViewer>
+
+      <GridSplitter Grid.Column="1" />
+
+      <DockPanel Grid.Column="2">
+        <TextBlock DockPanel.Dock="Top" Classes="header" Text="VISTA PREVIA" />
+        <viewer:MeshViewport x:Name="Viewport" />
+      </DockPanel>
+    </Grid>
+  </DockPanel>
+</Window>

@@ -9,6 +9,7 @@ using EasyClothes.Core.Export;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Modeling;
+using EasyClothes.Core.Rage;
 using EasyClothes.Core.Projects;
 using EasyClothes.Core.Settings;
 using EasyClothes.Core.Textures;
@@ -654,6 +655,92 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
         MarkChanged(rebuildTree: false);
         _ = LoadPreviewAsync();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanImport))]
+    private async Task ImportModelAsync()
+    {
+        var files = await dialogs.PickFilesAsync("Importar modelo 3D", "Modelos .obj", ["*.obj"], multiple: false);
+        if (files.Count == 0) return;
+        if (await ReadObjAsync(files[0]) is not { } model) return;
+
+        var gender = Selected?.Model.Gender ?? PedGender.Male;
+        var placement = new ModelPlacementViewModel(dialogs, model, files[0], StartingPlacement(model.Mesh), gender, PropSlot.Hat, editing: false, ModelStageFor)
+        {
+            ExportReferenceHead = ExportReferenceHeadAsync,
+        };
+        await dialogs.PlaceModelAsync(placement);
+        if (!placement.Confirmed) return;
+
+        EnsureProject();
+        var name = string.IsNullOrWhiteSpace(placement.Name) ? "Modelo" : placement.Name.Trim();
+        var source = files[0];
+        if (await RunCapJobAsync(() => ObjProp.Create(Project!, ProjectDir!, source, placement.TexturePath, placement.Slot.Value, placement.Gender.Value, name, placement.Placement)) is not { } prop) return;
+        MarkChanged(rebuildTree: true);
+        Select(prop.Id);
+        Status = string.Join(" ", new[] { $"{prop.Name} importado como accesorio." }.Concat(model.Warnings));
+    }
+
+    [RelayCommand]
+    private async Task PlaceImportedModelAsync()
+    {
+        if (Selected is not { Model.Imported: { } imported } selected) return;
+        if (await ReadObjAsync(Path.Combine(ProjectDir!, imported.SourcePath)) is not { } model) return;
+        var texture = SelectedTexture is null ? null : Preview?.Texture;
+        var placement = new ModelPlacementViewModel(dialogs, model, imported.SourcePath, imported.Placement, selected.Model.Gender, selected.Model.Prop ?? PropSlot.Hat,
+            editing: true, ModelStageFor, texture) { ExportReferenceHead = ExportReferenceHeadAsync };
+        await dialogs.PlaceModelAsync(placement);
+        if (!placement.Confirmed) return;
+        var drawable = selected.Model;
+        if (await RunCapJobAsync(() => ObjProp.Replace(ProjectDir!, drawable, placement.Placement)) is not { } backup) return;
+        MarkChanged(rebuildTree: false);
+        _ = LoadPreviewAsync();
+        Status = $"{drawable.Name} recolocado; el modelo anterior está en {backup}.";
+    }
+
+    private async Task<ObjModel?> ReadObjAsync(string path)
+    {
+        try
+        {
+            return await Task.Run(() => ObjReader.Read(path));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            Status = $"No se pudo leer {Path.GetFileName(path)}: {ex.Message}";
+            return null;
+        }
+    }
+
+    // Models made on the reference head are already in place; anything else starts auto-fitted.
+    private static PropPlacement StartingPlacement(MeshData obj)
+    {
+        var (min, max) = MeshBounds.Of([ObjProp.Place(obj, new PropPlacement())]);
+        var size = (max - min).Length();
+        var centre = (min + max) / 2;
+        return size is > 0.05f and < 0.8f && centre.Length() < 0.4f ? new PropPlacement() : ObjProp.Fit(obj);
+    }
+
+    private CapStage ModelStageFor(PedGender gender, PropSlot slot)
+    {
+        if (!ShowBody) return new CapStage([], null);
+        var fit = BaseBody.Fit(Settings.BaseBodyFolder!, gender, null, slot);
+        return new CapStage(LoadBody(fit.Parts), fit.Anchor);
+    }
+
+    private async Task<string?> ExportReferenceHeadAsync(PedGender gender, string name)
+    {
+        if (Settings.BaseBodyFolder is not { } folder || BaseBody.ResolveRoot(folder) is not { } root)
+            return "Configura la carpeta del personaje (Mostrar cuerpo) para poder exportar la cabeza de referencia.";
+        if (await dialogs.PickSaveFileAsync("Guardar cabeza de referencia", "cabeza_referencia.obj", "Modelo 3D", ".obj") is not { } path) return null;
+        try
+        {
+            await Task.Run(() => ObjProp.ExportReferenceHead(root, gender, path));
+            return $"Cabeza guardada en {path}. Es del juego: úsala solo para modelar, no la publiques.";
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            return $"No se pudo exportar la cabeza: {ex.Message}";
+        }
     }
 
     private async Task<T?> RunCapJobAsync<T>(Func<T> job)

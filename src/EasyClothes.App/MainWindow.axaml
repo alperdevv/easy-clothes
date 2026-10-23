@@ -30,6 +30,7 @@
         <Button Content="Importar prendas" Command="{Binding ImportCommand}" ToolTip.Tip="Importar .ydd con sus texturas (Ctrl+I). También puedes arrastrarlos a la ventana." />
         <Button Content="Importar carpeta" Command="{Binding ImportFolderCommand}" ToolTip.Tip="Importar todas las prendas de una carpeta y sus subcarpetas (Ctrl+Mayús+I). Si es un recurso ya generado (con su .ymt), cada prenda conserva su número y sus opciones." />
         <Button Content="Importar tatuajes" Command="{Binding ImportTattoosCommand}" ToolTip.Tip="Importar imágenes .png o .ytd como tatuajes" />
+        <Button Content="Importar modelo 3D" Command="{Binding ImportModelCommand}" ToolTip.Tip="Convierte tu propio modelo .obj (por ejemplo de Blender) en gorra, gafas o pendientes del juego" />
         <Button Content="Nueva gorra" Command="{Binding NewCapCommand}" ToolTip.Tip="Crear desde cero una gorra, bucket, gorro de lana o visera: eliges modelo, forma y colores y lo puedes cambiar cuando quieras" />
         <Button Content="Eliminar" Command="{Binding RemoveCommand}" />
         <Rectangle Classes="separator" />
@@ -182,6 +183,9 @@
               <NumericUpDown Value="{Binding HeelHeight}" Increment="0.1" Minimum="0.1" Maximum="3" FormatString="0.0" IsVisible="{Binding HasHeels}"
                              ToolTip.Tip="1 es la altura de los tacones del juego (suela unos 9 cm más baja)" />
             </StackPanel>
+            <Button Content="Colocar modelo importado…" HorizontalAlignment="Stretch" Margin="0,8,0,0" IsVisible="{Binding IsImportedModel}"
+                    ToolTip.Tip="Mover, girar o escalar el modelo .obj sobre la cabeza"
+                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).PlaceImportedModelCommand}" />
             <Button Content="Editar gorra…" HorizontalAlignment="Stretch" Margin="0,8,0,0" IsVisible="{Binding IsGeneratedCap}"
                     ToolTip.Tip="Cambiar la forma (las texturas siguen encajando) o crear otra textura con otros colores"
                     Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).EditCapCommand}" />

@@ -69,6 +69,9 @@ public sealed class Drawable
     // Set on caps made by EasyClothes, so their shape can be changed later.
     public CapDesign? Cap { get; set; }
 
+    // Set on props made from the user's own .obj, so they can be placed again later.
+    public ImportedModel? Imported { get; set; }
+
     public bool IsProp => Prop is not null;
 }
 

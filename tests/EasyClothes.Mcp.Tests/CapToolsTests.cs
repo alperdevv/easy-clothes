@@ -19,6 +19,25 @@ public sealed class CapToolsTests : IDisposable
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     [Fact]
+    public async Task Claude_can_import_a_model_and_move_it()
+    {
+        var project = Path.Combine(_root, "Propios");
+        await _edit.CreateProject(project, "Propios");
+        var obj = Path.Combine(_root, "sombrero.obj");
+        File.WriteAllText(obj, "v -10 0 -10\nv 10 0 -10\nv 10 0 10\nv -10 0 10\nv 0 15 0\nf 1 2 5\nf 2 3 5\nf 3 4 5\nf 4 1 5\n");
+        var models = new ModelTools(new Workspace(new ServerOptions([], null)));
+
+        var imported = await models.ImportModel(project, obj, fit: true);
+        var moved = await models.PlaceModel(project, "sombrero", upCm: imported.Placement.UpCm + 1, turn: 15);
+
+        Assert.Equal(("p_head", 0.01f), (imported.Garment.SlotCode, imported.Placement.Scale));
+        Assert.Contains(imported.Warnings, w => w.Contains("UV"));
+        Assert.Equal((imported.Placement.UpCm + 1, 15f, 0.01f), (moved.Placement.UpCm, moved.Placement.Turn, moved.Placement.Scale));
+        await Assert.ThrowsAsync<McpException>(() => models.ImportModel(project, obj, slot: "zapatos"));
+        Assert.Contains("--body", Assert.Throws<McpException>(() => models.ExportReferenceHead(Path.Combine(_root, "cabeza.obj"))).Message);
+    }
+
+    [Fact]
     public async Task Claude_can_create_reshape_and_recolour_a_cap()
     {
         var project = Path.Combine(_root, "Gorras");
