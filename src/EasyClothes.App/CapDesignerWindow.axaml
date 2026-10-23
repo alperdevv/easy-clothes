@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:viewer="using:EasyClothes.App.Viewer"
         xmlns:vm="using:EasyClothes.App.ViewModels"
+        xmlns:core="using:EasyClothes.Core.Modeling"
         x:Class="EasyClothes.App.CapDesignerWindow"
         x:DataType="vm:CapDesignerViewModel" Icon="/Assets/icon.ico"
         Title="{Binding Title}" Width="1100" Height="760" WindowStartupLocation="CenterOwner"
@@ -49,6 +50,27 @@
               </ComboBox.ItemTemplate>
             </ComboBox>
           </StackPanel>
+
+          <TextBlock Classes="header" Text="MIS PLANTILLAS" Margin="0,10,0,0" />
+          <DockPanel>
+            <Button DockPanel.Dock="Right" Classes="small" Content="Borrar" Margin="4,0,0,0" Command="{Binding DeleteTemplateCommand}" />
+            <Button DockPanel.Dock="Right" Classes="small" Content="Usar" Margin="4,0,0,0" Command="{Binding UseTemplateCommand}"
+                    ToolTip.Tip="Carga la forma y los colores de la plantilla" />
+            <ComboBox ItemsSource="{Binding Templates}" SelectedItem="{Binding SelectedTemplate}" HorizontalAlignment="Stretch"
+                      PlaceholderText="Aún no tienes plantillas">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="core:CapTemplate">
+                  <TextBlock Text="{Binding Name}" />
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+          </DockPanel>
+          <DockPanel Margin="0,4,0,0">
+            <Button DockPanel.Dock="Right" Classes="small" Content="Guardar diseño" Margin="4,0,0,0" Command="{Binding SaveTemplateCommand}"
+                    ToolTip.Tip="Guarda la forma y los colores actuales para usarlos en otras prendas" />
+            <TextBox Text="{Binding TemplateName}" PlaceholderText="Nombre de la plantilla" />
+          </DockPanel>
+          <TextBlock Classes="muted" TextWrapping="Wrap" Text="{Binding TemplateNote}" IsVisible="{Binding TemplateNote, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
           <DockPanel Margin="0,10,0,0">
             <Button DockPanel.Dock="Right" Classes="small" Content="Restablecer" Command="{Binding ResetShapeCommand}" ToolTip.Tip="Vuelve a la forma de partida sin tocar los colores" />

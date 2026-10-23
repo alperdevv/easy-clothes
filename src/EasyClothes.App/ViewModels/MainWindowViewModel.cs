@@ -387,6 +387,8 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
             : $"Nueva textura {TextureVariation.LetterFor(saved.Index)} creada a partir de la edición.";
     }
 
+    public CapTemplates CapTemplates { get; set; } = new(CapTemplates.DefaultFolder);
+
     // The MCP server ships next to the app, so Claude can work on projects directly.
     public string McpServerPath { get; set; } = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "EasyClothes.Mcp.exe" : "EasyClothes.Mcp");
 
@@ -616,7 +618,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     private async Task NewCapAsync()
     {
         var gender = Selected?.Model.Gender ?? PedGender.Male;
-        var designer = new CapDesignerViewModel(new CapDesign(), gender, editing: false, CapStageFor);
+        var designer = new CapDesignerViewModel(new CapDesign(), gender, editing: false, CapStageFor, CapTemplates);
         await dialogs.DesignCapAsync(designer);
         if (designer.Action != CapDesignerAction.Create) return;
 
@@ -632,7 +634,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     private async Task EditCapAsync()
     {
         if (Selected is not { Model.Cap: { } design } selected) return;
-        var designer = new CapDesignerViewModel(design, selected.Model.Gender, editing: true, CapStageFor);
+        var designer = new CapDesignerViewModel(design, selected.Model.Gender, editing: true, CapStageFor, CapTemplates);
         await dialogs.DesignCapAsync(designer);
         var drawable = selected.Model;
         switch (designer.Action)

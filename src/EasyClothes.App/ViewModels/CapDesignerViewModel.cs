@@ -71,15 +71,18 @@ public sealed partial class CapDesignerViewModel : ObservableObject
     private CancellationTokenSource? _pending;
     private bool _loading;
     private readonly CapKind _kind;
+    private readonly CapTemplates _templates;
 
-    public CapDesignerViewModel(CapDesign design, PedGender gender, bool editing, Func<PedGender, CapStage> stageFor)
+    public CapDesignerViewModel(CapDesign design, PedGender gender, bool editing, Func<PedGender, CapStage> stageFor, CapTemplates templates)
     {
         _stageFor = stageFor;
+        _templates = templates;
         IsEditing = editing;
         _kind = design.Kind;
         Gender = GenderOption.For(gender);
         PropertyChanged += OnChanged;
         Load(design.Clamped());
+        RefreshTemplates();
     }
 
     public bool IsEditing { get; }
@@ -98,6 +101,19 @@ public sealed partial class CapDesignerViewModel : ObservableObject
 
     [ObservableProperty]
     public partial string? PreviewError { get; set; }
+
+    public System.Collections.ObjectModel.ObservableCollection<CapTemplate> Templates { get; } = [];
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(UseTemplateCommand), nameof(DeleteTemplateCommand))]
+    public partial CapTemplate? SelectedTemplate { get; set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SaveTemplateCommand))]
+    public partial string TemplateName { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string? TemplateNote { get; set; }
 
     [ObservableProperty]
     public partial GenderOption Gender { get; set; }
@@ -245,6 +261,59 @@ public sealed partial class CapDesignerViewModel : ObservableObject
             OnPropertyChanged(name);
     }
 
+    private bool HasTemplate => SelectedTemplate is not null;
+    private bool CanSaveTemplate => !string.IsNullOrWhiteSpace(TemplateName);
+
+    // Takes shape and colours from the template; an existing garment keeps its gender and name.
+    [RelayCommand(CanExecute = nameof(HasTemplate))]
+    private void UseTemplate()
+    {
+        Load(SelectedTemplate!.Design);
+        TemplateNote = $"Plantilla «{SelectedTemplate.Name}» cargada.";
+    }
+
+    [RelayCommand(CanExecute = nameof(CanSaveTemplate))]
+    private void SaveTemplate()
+    {
+        try
+        {
+            var saved = _templates.Save(TemplateName, Design);
+            RefreshTemplates();
+            SelectedTemplate = Templates.FirstOrDefault(t => t.Name == saved.Name);
+            TemplateNote = $"Guardada como «{saved.Name}». La tendrás en Mis plantillas al crear otra.";
+            TemplateName = "";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            TemplateNote = $"No se pudo guardar la plantilla: {ex.Message}";
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasTemplate))]
+    private void DeleteTemplate()
+    {
+        var name = SelectedTemplate!.Name;
+        try
+        {
+            _templates.Delete(name);
+            RefreshTemplates();
+            TemplateNote = $"Plantilla «{name}» borrada.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            TemplateNote = $"No se pudo borrar la plantilla: {ex.Message}";
+        }
+    }
+
+    // While editing, only templates with the same texture layout fit the garment.
+    private void RefreshTemplates()
+    {
+        Templates.Clear();
+        foreach (var template in _templates.List().Where(t => IsNew || t.Design.Kind == _kind))
+            Templates.Add(template);
+        SelectedTemplate = Templates.FirstOrDefault();
+    }
+
     private void Finish(CapDesignerAction action)
     {
         Action = action;
@@ -281,7 +350,7 @@ public sealed partial class CapDesignerViewModel : ObservableObject
 
     private void OnChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (_loading || e.PropertyName is nameof(Name) or nameof(PreviewError)) return;
+        if (_loading || e.PropertyName is nameof(Name) or nameof(PreviewError) or nameof(SelectedTemplate) or nameof(TemplateName) or nameof(TemplateNote)) return;
         SchedulePreview();
     }
 

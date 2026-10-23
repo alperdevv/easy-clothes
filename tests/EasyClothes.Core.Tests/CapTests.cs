@@ -93,12 +93,13 @@ public sealed class CapTests : IDisposable
         var mine = new CapDesign { Rotation = 90, Colours = new CapColours { Crown = 0x123456 } };
 
         var snapback = mine.WithStyle(CapStyle.Snapback);
-        var legacy = System.Text.Json.JsonSerializer.Deserialize<CapDesign>("{\"Backwards\":true,\"VisorLength\":5}")!;
+        var json = """{"name":"t","collectionName":"t","drawables":[{"name":"g","prop":"hat","modelPath":"m.ydd","cap":{"backwards":true,"visorLength":5}}]}""";
+        var legacy = ProjectFile.Deserialize(json).Drawables[0].Cap!;
 
         Assert.Equal((CapStyle.Snapback, 90f, 0x123456u), (snapback.Style, snapback.Rotation, snapback.Colours.Crown));
         Assert.True(snapback.VisorCurve < 0.1f);
         Assert.Equal((180f, 5f), (legacy.Rotation, legacy.VisorLength));
-        Assert.DoesNotContain("Backwards", System.Text.Json.JsonSerializer.Serialize(legacy));
+        Assert.DoesNotContain("backwards", ProjectFile.Serialize(new ClothingProject { Name = "t", CollectionName = "t", Drawables = [new Drawable { Name = "g", ModelPath = "m", Cap = legacy }] }));
     }
 
     [Fact]
@@ -154,6 +155,24 @@ public sealed class CapTests : IDisposable
         Assert.True(At(layout.Visor).R > 150 && At(layout.Visor).G < 60);
         Assert.True(At(layout.Extra).G > 120 && At(layout.Extra).R < 80);
         Assert.True(At(layout.Crown).R < 40);
+    }
+
+    [Fact]
+    public void Templates_are_saved_listed_and_deleted_and_bad_files_are_skipped()
+    {
+        var store = new CapTemplates(Path.Combine(_dir, "plantillas"));
+        Assert.Empty(store.List());
+
+        store.Save("Mi snapback", new CapDesign { Rotation = 90 }.WithStyle(CapStyle.Snapback));
+        var odd = store.Save("../fuera", new CapDesign().WithStyle(CapStyle.Beanie));
+        File.WriteAllText(Path.Combine(store.Folder, "rota.json"), "{ esto no es json");
+
+        Assert.Equal("fuera", odd.Name);
+        Assert.Equal(["fuera", "Mi snapback"], store.List().Select(t => t.Name));
+        Assert.Equal((CapStyle.Snapback, 90f), (store.Find("mi SNAPBACK")!.Design.Style, store.Find("mi snapback")!.Design.Rotation));
+        Assert.True(store.Delete("fuera"));
+        Assert.False(store.Delete("fuera"));
+        Assert.Throws<ArgumentException>(() => store.Save("  ", new CapDesign()));
     }
 
     private static float Length(float[] v, int i) => MathF.Sqrt(v[i * 3] * v[i * 3] + v[i * 3 + 1] * v[i * 3 + 1] + v[i * 3 + 2] * v[i * 3 + 2]);

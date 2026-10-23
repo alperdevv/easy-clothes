@@ -437,12 +437,20 @@ public sealed class MainWindowTests : IDisposable
         window.Show();
         await window.ViewModel.OpenProjectFileAsync(path);
 
+        window.ViewModel.CapTemplates = new EasyClothes.Core.Modeling.CapTemplates(Path.Combine(_dir, "plantillas"));
         var creating = window.ViewModel.NewCapCommand.ExecuteAsync(null);
         var designer = await OpenedDesigner(window);
+        Assert.Empty(designer.Templates);
         designer.Name = "Snapback";
         designer.VisorLength = 5;
         designer.FrontColor = Avalonia.Media.Colors.White;
         await WaitUntil(() => designer.Preview is not null);
+        designer.TemplateName = "Blanca";
+        designer.SaveTemplateCommand.Execute(null);
+        Assert.Equal("Blanca", designer.SelectedTemplate?.Name);
+        designer.VisorLength = 9;
+        designer.UseTemplateCommand.Execute(null);
+        Assert.Equal(5, designer.VisorLength);
         designer.CreateCommand.Execute(null);
         await creating;
 

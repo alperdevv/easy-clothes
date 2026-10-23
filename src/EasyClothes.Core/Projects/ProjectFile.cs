@@ -9,7 +9,7 @@ public static class ProjectFile
     public const string Extension = ".ecproj";
     public const string BackupsFolder = ".backups";
 
-    private static readonly JsonSerializerOptions Options = new()
+    internal static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,

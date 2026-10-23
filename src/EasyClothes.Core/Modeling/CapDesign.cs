@@ -54,7 +54,7 @@ public sealed record CapDesign
     public CapColours Colours { get; init; } = new();
 
     // Caps saved before Rotation existed only knew "backwards".
-    [JsonInclude, JsonPropertyName("Backwards"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    [JsonInclude, JsonPropertyName("backwards"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     internal bool LegacyBackwards
     {
         get => false;

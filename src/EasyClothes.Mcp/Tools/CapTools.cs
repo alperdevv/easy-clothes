@@ -11,11 +11,16 @@ public sealed record CapShape(string Style, float Rotation, float Size, float Cr
 
 public sealed record CapColourSet(string Crown, string Front, string Visor, string UnderVisor, string Button, string Stitch);
 
+public sealed record TemplateInfo(string Name, string Style, CapColourSet Colours);
+
 public sealed record CapInfo(GarmentSummary Garment, CapShape Shape, CapColourSet Colours, string TextureLayout);
 
 [McpServerToolType]
 public sealed class CapTools(Workspace workspace)
 {
+    // Shared with the app: templates saved in either show up in both.
+    public CapTemplates Templates { get; init; } = new(CapTemplates.DefaultFolder);
+
     // Where each piece sits in the texture, so Claude can place logos with edit_texture.
     private static string Layout(CapKind kind) => "Plantilla UV fija (0-1, origen arriba a la izquierda): " + kind switch
     {
@@ -36,6 +41,7 @@ public sealed class CapTools(Workspace workspace)
         [Description("Archivo .ecproj o la carpeta que lo contiene.")] string project,
         [Description("hombre o mujer.")] string gender = "hombre",
         [Description("Nombre de la prenda.")] string name = "Gorra",
+        [Description("Plantilla del usuario de la que partir (ver list_cap_templates); sus valores se usan salvo los que indiques aquí. Si la das, se ignora style.")] string? template = null,
         [Description("Modelo de partida: beisbol, snapback (copa alta y visera plana), dad (baja y blanda), trucker (rejilla detrás), bucket (gorro de pescador), gorro (de lana) o visera (sin copa).")] string style = "beisbol",
         [Description("Talla, 0.95-1.1 (1 = ajustada a la cabeza del personaje).")] float? size = null,
         [Description("Alto desde la banda en cm, hasta 16 (estándar 11 en gorras; el mínimo, que tapa la cabeza, depende del modelo).")] float? crownHeightCm = null,
@@ -60,7 +66,9 @@ public sealed class CapTools(Workspace workspace)
         CancellationToken ct = default)
     {
         var loaded = await workspace.LoadAsync(project, ct);
-        var design = Shaped(new CapDesign().WithStyle(ParseStyle(style)), size, crownHeightCm, crownShape, visorLengthCm, visorCurve, visorAngle, visorWidth, visorSquare, rotation, button, brimWidthCm, brimDroop, cuffHeightCm, pompom);
+        var start = template is null ? new CapDesign().WithStyle(ParseStyle(style))
+            : Templates.Find(template)?.Design ?? throw new McpException($"No hay ninguna plantilla '{template}'. Usa list_cap_templates.");
+        var design = Shaped(start, size, crownHeightCm, crownShape, visorLengthCm, visorCurve, visorAngle, visorWidth, visorSquare, rotation, button, brimWidthCm, brimDroop, cuffHeightCm, pompom);
         design = design with { Colours = Coloured(design.Colours, crownColor, frontColor, visorColor, underVisorColor, buttonColor, stitchColor) };
         var cap = Guard(() => CapGarment.Create(loaded.Project, loaded.Dir, design, Workspace.ParseGender(gender), name));
         await Workspace.SaveAsync(loaded, ct);
@@ -117,6 +125,33 @@ public sealed class CapTools(Workspace workspace)
         return Info(loaded.Project, cap);
     }
 
+    [McpServerTool(Name = "list_cap_templates", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description("Lista las plantillas de gorra que el usuario ha guardado (desde la app o con save_cap_template), para crear prendas con create_cap template=...")]
+    public IReadOnlyList<TemplateInfo> ListCapTemplates() =>
+        Templates.List().Select(t => new TemplateInfo(t.Name, StyleName(t.Design.Style), Colours(t.Design.Colours))).ToList();
+
+    [McpServerTool(Name = "save_cap_template", Destructive = false, OpenWorld = false)]
+    [Description("Guarda la forma y los colores de una gorra del proyecto como plantilla del usuario, para reutilizarla en otras prendas y en la app. Si ya existe una con ese nombre, se sustituye.")]
+    public async Task<TemplateInfo> SaveCapTemplate(
+        [Description("Archivo .ecproj o la carpeta que lo contiene.")] string project,
+        [Description("Id de la gorra, o su nombre si es único.")] string garment,
+        [Description("Nombre de la plantilla.")] string name,
+        CancellationToken ct = default)
+    {
+        var loaded = await workspace.LoadAsync(project, ct);
+        var cap = Workspace.FindGarment(loaded.Project, garment);
+        var design = cap.Cap ?? throw new McpException($"{cap.Name} no es una gorra creada con EasyClothes.");
+        try
+        {
+            var saved = Templates.Save(name, design);
+            return new TemplateInfo(saved.Name, StyleName(saved.Design.Style), Colours(saved.Design.Colours));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            throw new McpException($"No se pudo guardar la plantilla: {ex.Message}");
+        }
+    }
+
     private static CapDesign Shaped(CapDesign d, float? size, float? crownHeight, float? crownShape, float? visorLength, float? visorCurve, float? visorAngle,
         float? visorWidth, float? visorSquare, float? rotation, bool? button, float? brimWidth, float? brimDroop, float? cuffHeight, bool? pompom) => d with
     {
@@ -154,7 +189,7 @@ public sealed class CapTools(Workspace workspace)
             Describe.Garment(project, cap),
             new CapShape(StyleName(d.Style), d.Rotation, d.Size, d.CrownHeight, d.CrownShape, d.VisorLength, d.VisorCurve, d.VisorAngle, d.VisorWidth, d.VisorSquare, d.Button,
                 d.BrimWidth, d.BrimDroop, d.CuffHeight, d.Pompom),
-            new CapColourSet(Hex(c.Crown), Hex(c.Front), Hex(c.Visor), Hex(c.UnderVisor), Hex(c.Button), Hex(c.Stitch)),
+            Colours(c),
             Layout(d.Kind));
     }
 
@@ -180,6 +215,8 @@ public sealed class CapTools(Workspace workspace)
         CapStyle.SunVisor => "visera",
         _ => "beisbol",
     };
+
+    private static CapColourSet Colours(CapColours c) => new(Hex(c.Crown), Hex(c.Front), Hex(c.Visor), Hex(c.UnderVisor), Hex(c.Button), Hex(c.Stitch));
 
     private static string Hex(uint rgb) => $"#{rgb:X6}";
 

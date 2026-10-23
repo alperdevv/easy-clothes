@@ -13,7 +13,7 @@ public sealed class CapToolsTests : IDisposable
     {
         var workspace = new Workspace(new ServerOptions([], null));
         _edit = new EditTools(workspace);
-        _caps = new CapTools(workspace);
+        _caps = new CapTools(workspace) { Templates = new EasyClothes.Core.Modeling.CapTemplates(Path.Combine(_root, "plantillas")) };
     }
 
     public void Dispose() => Directory.Delete(_root, recursive: true);
@@ -41,6 +41,13 @@ public sealed class CapToolsTests : IDisposable
         var beanie = await _caps.CreateCap(project, "mujer", "Gorro", style: "gorro", cuffHeightCm: 3, pompom: true);
         Assert.Equal(("gorro", 3f, true), (beanie.Shape.Style, beanie.Shape.CuffHeightCm, beanie.Shape.Pompom));
         Assert.Contains("doblez", beanie.TextureLayout);
+        var saved = await _caps.SaveCapTemplate(project, "Gorro", "Invierno");
+        Assert.Equal(("Invierno", "gorro"), (saved.Name, saved.Style));
+        Assert.Equal(["Invierno"], _caps.ListCapTemplates().Select(t => t.Name));
+        var fromTemplate = await _caps.CreateCap(project, "hombre", "Gorro 2", template: "invierno", crownColor: "#00AA00");
+        Assert.Equal(("gorro", true, "#00AA00"), (fromTemplate.Shape.Style, fromTemplate.Shape.Pompom, fromTemplate.Colours.Crown));
+        await Assert.ThrowsAsync<McpException>(() => _caps.CreateCap(project, template: "no existe"));
+
         var mismatch = await Assert.ThrowsAsync<McpException>(() => _caps.UpdateCap(project, "Gorro", "shape", style: "bucket"));
         Assert.Contains("create_cap", mismatch.Message);
     }
