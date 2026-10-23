@@ -141,7 +141,7 @@ public static class DrawableImporter
         }
     }
 
-    private static string UniqueDir(string projectDir, string relativeDir)
+    internal static string UniqueDir(string projectDir, string relativeDir)
     {
         var candidate = relativeDir;
         for (var i = 2; Directory.Exists(Path.Combine(projectDir, candidate)); i++)
@@ -158,7 +158,7 @@ public static class DrawableImporter
         return relative.Replace('\\', '/');
     }
 
-    private static string UniqueName(ClothingProject project, PedGender gender, string name)
+    internal static string UniqueName(ClothingProject project, PedGender gender, string name)
     {
         var candidate = name;
         for (var i = 2; project.DrawablesFor(gender).Any(d => d.Name == candidate); i++)

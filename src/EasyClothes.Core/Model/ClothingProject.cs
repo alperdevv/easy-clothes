@@ -1,3 +1,5 @@
+using EasyClothes.Core.Modeling;
+
 namespace EasyClothes.Core.Model;
 
 public sealed class ClothingProject
@@ -63,6 +65,9 @@ public sealed class Drawable
 
     public List<TextureVariation> Textures { get; set; } = [];
     public DrawableFlags Flags { get; set; } = new();
+
+    // Set on caps made by EasyClothes, so their shape can be changed later.
+    public CapDesign? Cap { get; set; }
 
     public bool IsProp => Prop is not null;
 }
