@@ -8,6 +8,7 @@ using EasyClothes.Core.Analysis;
 using EasyClothes.Core.Export;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
+using EasyClothes.Core.Modeling;
 using EasyClothes.Core.Projects;
 using EasyClothes.Core.Settings;
 using EasyClothes.Core.Textures;
@@ -609,6 +610,74 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         MarkChanged(rebuildTree: true);
         Select(reserved.Id);
         Status = $"Número {DrawableOrder.NumberOf(Project!, reserved):000} reservado; asígnale una prenda cuando la tengas.";
+    }
+
+    [RelayCommand(CanExecute = nameof(CanImport))]
+    private async Task NewCapAsync()
+    {
+        var gender = Selected?.Model.Gender ?? PedGender.Male;
+        var designer = new CapDesignerViewModel(new CapDesign(), gender, editing: false, CapStageFor);
+        await dialogs.DesignCapAsync(designer);
+        if (designer.Action != CapDesignerAction.Create) return;
+
+        EnsureProject();
+        var name = string.IsNullOrWhiteSpace(designer.Name) ? "Gorra" : designer.Name.Trim();
+        if (await RunCapJobAsync(() => CapGarment.Create(Project!, ProjectDir!, designer.Design, designer.Gender.Value, name)) is not { } cap) return;
+        MarkChanged(rebuildTree: true);
+        Select(cap.Id);
+        Status = $"{cap.Name} creada. Edita su textura para añadir logos, o pulsa «Editar gorra» para cambiar forma y colores.";
+    }
+
+    [RelayCommand]
+    private async Task EditCapAsync()
+    {
+        if (Selected is not { Model.Cap: { } design } selected) return;
+        var designer = new CapDesignerViewModel(design, selected.Model.Gender, editing: true, CapStageFor);
+        await dialogs.DesignCapAsync(designer);
+        var drawable = selected.Model;
+        switch (designer.Action)
+        {
+            case CapDesignerAction.Reshape:
+                if (await RunCapJobAsync(() => CapGarment.Reshape(ProjectDir!, drawable, designer.Design)) is not { } backup) return;
+                Status = $"Forma de {drawable.Name} actualizada; el modelo anterior está en {backup}.";
+                break;
+            case CapDesignerAction.AddColours:
+                if (await RunCapJobAsync(() => (int?)CapGarment.AddColourway(ProjectDir!, drawable, designer.Design.Colours)) is not { } index) return;
+                selected.RefreshTextures();
+                SelectedTexture = selected.Textures[index];
+                Status = $"Textura {TextureVariation.LetterFor(index)} añadida a {drawable.Name}.";
+                break;
+            default:
+                return;
+        }
+        MarkChanged(rebuildTree: false);
+        _ = LoadPreviewAsync();
+    }
+
+    private async Task<T?> RunCapJobAsync<T>(Func<T> job)
+    {
+        IsBusy = true;
+        try
+        {
+            return await Task.Run(job);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Status = $"No se pudo guardar la gorra: {ex.Message}";
+            return default;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    // Runs off the UI thread while the designer previews.
+    private CapStage CapStageFor(PedGender gender)
+    {
+        if (!ShowBody) return new CapStage([], null);
+        var fit = BaseBody.Fit(Settings.BaseBodyFolder!, gender, null, PropSlot.Hat);
+        return new CapStage(LoadBody(fit.Parts), fit.Anchor);
     }
 
     [RelayCommand]

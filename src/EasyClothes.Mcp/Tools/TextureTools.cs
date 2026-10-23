@@ -123,14 +123,14 @@ public sealed class TextureTools(Workspace workspace)
                     Saturation = Math.Clamp((op.Saturation ?? 0) / 100, -1, 1),
                     Brightness = Math.Clamp((op.Brightness ?? 0) / 100, -1, 1),
                     Contrast = Math.Clamp((op.Contrast ?? 0) / 100, -1, 1),
-                    TintRgb = op.Color is null ? 0xFFFFFF : ParseColor(op.Color),
+                    TintRgb = op.Color is null ? 0xFFFFFF : Workspace.ParseColor(op.Color),
                     TintStrength = op.Color is null ? 0 : Percent(op.Strength ?? 50),
                     Opacity = opacity,
                 };
             case "recolor":
-                return new FillLayer { Name = $"Color {op.Color} (Claude)", Rgb = ParseColor(op.Color ?? throw new McpException("recolor necesita color.")), Blend = BlendMode.Color, Opacity = Percent(op.Strength ?? 100) };
+                return new FillLayer { Name = $"Color {op.Color} (Claude)", Rgb = Workspace.ParseColor(op.Color ?? throw new McpException("recolor necesita color.")), Blend = BlendMode.Color, Opacity = Percent(op.Strength ?? 100) };
             case "fill":
-                return new FillLayer { Name = $"Relleno {op.Color} (Claude)", Rgb = ParseColor(op.Color ?? throw new McpException("fill necesita color.")), Blend = blend, Opacity = opacity };
+                return new FillLayer { Name = $"Relleno {op.Color} (Claude)", Rgb = Workspace.ParseColor(op.Color ?? throw new McpException("fill necesita color.")), Blend = blend, Opacity = opacity };
             case "image":
                 return new ImageLayer
                 {
@@ -174,14 +174,6 @@ public sealed class TextureTools(Workspace workspace)
         blend is null ? BlendMode.Normal
         : Enum.TryParse<BlendMode>(blend.Replace("_", "").Replace("-", ""), ignoreCase: true, out var mode) ? mode
         : throw new McpException($"Modo de fusión desconocido '{blend}'.");
-
-    private static uint ParseColor(string color)
-    {
-        var hex = color.Trim().TrimStart('#');
-        return hex.Length == 6 && uint.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var rgb)
-            ? rgb
-            : throw new McpException($"Color '{color}' no válido; usa #RRGGBB.");
-    }
 
     private static T Guard<T>(Drawable d, Func<T> action)
     {

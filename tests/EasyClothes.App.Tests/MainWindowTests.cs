@@ -429,6 +429,56 @@ public sealed class MainWindowTests : IDisposable
     private static void SelectByName(MainWindowViewModel vm, string name) =>
         vm.SelectedNode = vm.Tree.SelectMany(g => g.Children).SelectMany(s => s.Children).Single(n => n.Title == name);
 
+    [AvaloniaFact]
+    public async Task A_cap_is_designed_created_and_given_another_colourway()
+    {
+        var path = await SaveProject(new ClothingProject { Name = "UI", CollectionName = "ui" });
+        var window = new MainWindow();
+        window.Show();
+        await window.ViewModel.OpenProjectFileAsync(path);
+
+        var creating = window.ViewModel.NewCapCommand.ExecuteAsync(null);
+        var designer = await OpenedDesigner(window);
+        designer.Name = "Snapback";
+        designer.VisorLength = 5;
+        designer.FrontColor = Avalonia.Media.Colors.White;
+        await WaitUntil(() => designer.Preview is not null);
+        designer.CreateCommand.Execute(null);
+        await creating;
+
+        var cap = window.ViewModel.Selected!;
+        Assert.Equal(("Snapback", PropSlot.Hat, 5f), (cap.Name, cap.Model.Prop!.Value, cap.Model.Cap!.VisorLength));
+        Assert.Equal(0xFFFFFFu, cap.Model.Cap.Colours.Front);
+        Assert.True(cap.IsGeneratedCap);
+        Assert.True(File.Exists(Path.Combine(_dir, cap.Model.ModelPath)));
+
+        var editing = window.ViewModel.EditCapCommand.ExecuteAsync(null);
+        designer = await OpenedDesigner(window);
+        Assert.True(designer.IsEditing);
+        designer.CrownColor = Avalonia.Media.Colors.Red;
+        designer.AddColoursCommand.Execute(null);
+        await editing;
+
+        Assert.Equal(2, cap.Model.Textures.Count);
+        Assert.Equal("b", window.ViewModel.SelectedTexture!.Letter);
+    }
+
+    private static async Task<CapDesignerViewModel> OpenedDesigner(MainWindow window)
+    {
+        await WaitUntil(() => window.OwnedWindows.OfType<CapDesignerWindow>().Any());
+        return (CapDesignerViewModel)window.OwnedWindows.OfType<CapDesignerWindow>().Single().DataContext!;
+    }
+
+    private static async Task WaitUntil(Func<bool> condition)
+    {
+        for (var i = 0; i < 200 && !condition(); i++)
+        {
+            await Task.Delay(25);
+            Dispatcher.UIThread.RunJobs();
+        }
+        Assert.True(condition());
+    }
+
     private async Task<string> SaveProject(ClothingProject project)
     {
         var path = Path.Combine(_dir, project.CollectionName + ProjectFile.Extension);

@@ -75,6 +75,12 @@ public sealed class DialogService(TopLevel topLevel) : IDialogService
         if (topLevel is Window owner) await window.ShowDialog(owner);
     }
 
+    public async Task DesignCapAsync(ViewModels.CapDesignerViewModel designer)
+    {
+        var window = new CapDesignerWindow(designer);
+        if (topLevel is Window owner) await window.ShowDialog(owner);
+    }
+
     public async Task<string?> PickSaveFileAsync(string title, string suggestedName, string description, string extension)
     {
         var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions

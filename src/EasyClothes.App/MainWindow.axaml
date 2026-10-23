@@ -30,6 +30,7 @@
         <Button Content="Importar prendas" Command="{Binding ImportCommand}" ToolTip.Tip="Importar .ydd con sus texturas (Ctrl+I). También puedes arrastrarlos a la ventana." />
         <Button Content="Importar carpeta" Command="{Binding ImportFolderCommand}" ToolTip.Tip="Importar todas las prendas de una carpeta y sus subcarpetas (Ctrl+Mayús+I). Si es un recurso ya generado (con su .ymt), cada prenda conserva su número y sus opciones." />
         <Button Content="Importar tatuajes" Command="{Binding ImportTattoosCommand}" ToolTip.Tip="Importar imágenes .png o .ytd como tatuajes" />
+        <Button Content="Nueva gorra" Command="{Binding NewCapCommand}" ToolTip.Tip="Crear una gorra desde cero: eliges forma y colores y la puedes cambiar cuando quieras" />
         <Button Content="Eliminar" Command="{Binding RemoveCommand}" />
         <Rectangle Classes="separator" />
         <Button Content="Generar recurso" Command="{Binding BuildResourceCommand}" ToolTip.Tip="Crear la carpeta del recurso de FiveM (Ctrl+B)" />
@@ -181,6 +182,9 @@
               <NumericUpDown Value="{Binding HeelHeight}" Increment="0.1" Minimum="0.1" Maximum="3" FormatString="0.0" IsVisible="{Binding HasHeels}"
                              ToolTip.Tip="1 es la altura de los tacones del juego (suela unos 9 cm más baja)" />
             </StackPanel>
+            <Button Content="Editar gorra…" HorizontalAlignment="Stretch" Margin="0,8,0,0" IsVisible="{Binding IsGeneratedCap}"
+                    ToolTip.Tip="Cambiar la forma (las texturas siguen encajando) o crear otra textura con otros colores"
+                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).EditCapCommand}" />
             <StackPanel IsVisible="{Binding IsHat}" Spacing="2" Margin="0,8,0,0">
               <TextBlock Classes="label" Text="Pelo bajo el sombrero" />
               <ComboBox ItemsSource="{x:Static vm:DrawableViewModel.HatHairOptions}" SelectedIndex="{Binding HatHairIndex}" HorizontalAlignment="Stretch"

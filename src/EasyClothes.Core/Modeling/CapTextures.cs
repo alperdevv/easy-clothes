@@ -13,29 +13,30 @@ public static class CapTextures
 
     private const int Panels = 6;
 
-    public static RgbaImage Diffuse(CapDesign design)
+    // Smaller sizes are for live previews; the saved texture uses DiffuseSize.
+    public static RgbaImage Diffuse(CapDesign design, int size = DiffuseSize)
     {
         var d = design.Clamped();
         var c = d.Colours;
-        var pattern = new Pattern(d, DiffuseSize);
-        var pixels = new byte[DiffuseSize * DiffuseSize * 4];
+        var pattern = new Pattern(d, size);
+        var pixels = new byte[size * size * 4];
         var stitch = Rgb(c.Stitch);
-        for (var y = 0; y < DiffuseSize; y++)
+        for (var y = 0; y < size; y++)
         {
-            for (var x = 0; x < DiffuseSize; x++)
+            for (var x = 0; x < size; x++)
             {
                 var p = pattern.At(x, y);
-                var colour = Base(c, x, y) * (1 - 0.45f * p.Seam) * (1 + 0.035f * p.Weave);
+                var colour = Base(c, (x + 0.5f) / size, (y + 0.5f) / size) * (1 - 0.45f * p.Seam) * (1 + 0.035f * p.Weave);
                 colour = Vector3.Lerp(colour, stitch, 0.9f * p.Stitch);
                 colour *= 1 - 0.6f * p.Eyelet;
-                var o = (y * DiffuseSize + x) * 4;
+                var o = (y * size + x) * 4;
                 pixels[o] = ToByte(colour.X);
                 pixels[o + 1] = ToByte(colour.Y);
                 pixels[o + 2] = ToByte(colour.Z);
                 pixels[o + 3] = 255;
             }
         }
-        return new RgbaImage(DiffuseSize, DiffuseSize, pixels);
+        return new RgbaImage(size, size, pixels);
     }
 
     public static RgbaImage Normal(CapDesign design)
@@ -80,9 +81,8 @@ public static class CapTextures
         return new RgbaImage(SpecularSize, SpecularSize, pixels);
     }
 
-    private static Vector3 Base(CapColours c, int x, int y)
+    private static Vector3 Base(CapColours c, float u, float v)
     {
-        var (u, v) = ((x + 0.5f) / DiffuseSize, (y + 0.5f) / DiffuseSize);
         bool In(UvRect r) => u >= r.U0 && u < r.U1 && v >= r.V0 && v < r.V1;
         if (In(CapModel.Crown)) return Rgb(u is >= 1f / 3 and < 2f / 3 ? c.Front : c.Crown);
         if (In(CapModel.Rim)) return Rgb(c.Crown) * 0.8f;

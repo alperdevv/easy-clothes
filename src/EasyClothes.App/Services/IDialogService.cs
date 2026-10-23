@@ -9,4 +9,5 @@ public interface IDialogService
     void OpenExternally(string path);
     Task CopyToClipboardAsync(string text);
     Task EditTextureAsync(ViewModels.TextureEditorViewModel editor);
+    Task DesignCapAsync(ViewModels.CapDesignerViewModel designer);
 }

@@ -46,13 +46,15 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
         set => SetValue(ShadingProperty, value);
     }
 
-    // Context items (the mannequin) are drawn without the wireframe overlay. The camera is only
-    // reframed when the scene's extent changes, so switching textures keeps the current view.
-    public void ShowScene(IReadOnlyList<RenderItem> items, IReadOnlyList<RenderItem> context)
+    // Context items (the mannequin) are drawn without the wireframe overlay. The camera frames the
+    // garment and is only reframed when its extent changes, so switching textures keeps the view;
+    // keepCamera holds it while a shape is being edited.
+    public void ShowScene(IReadOnlyList<RenderItem> items, IReadOnlyList<RenderItem> context, bool keepCamera = false)
     {
         _pendingScene = [.. items.Select(i => (i, false)), .. context.Select(i => (i, true))];
-        var bounds = MeshBounds.Of(items.Concat(context).SelectMany(i => i.Meshes));
-        if (bounds != _bounds)
+        var framed = items.Any(i => i.Meshes.Count > 0) ? items : context;
+        var bounds = MeshBounds.Of(framed.SelectMany(i => i.Meshes));
+        if (bounds != _bounds && (!keepCamera || _bounds == default))
         {
             _bounds = bounds;
             ResetCamera();
