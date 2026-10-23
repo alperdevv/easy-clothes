@@ -3,7 +3,7 @@
         xmlns:viewer="using:EasyClothes.App.Viewer"
         xmlns:vm="using:EasyClothes.App.ViewModels"
         x:Class="EasyClothes.App.TextureEditorWindow"
-        x:DataType="vm:TextureEditorViewModel"
+        x:DataType="vm:TextureEditorViewModel" Icon="/Assets/icon.ico"
         Title="{Binding Title}" Width="1500" Height="900" WindowStartupLocation="CenterOwner"
         Background="{StaticResource WindowBrush}">
   <Window.KeyBindings>

@@ -3,7 +3,7 @@
         xmlns:viewer="using:EasyClothes.App.Viewer"
         xmlns:vm="using:EasyClothes.App.ViewModels"
         x:Class="EasyClothes.App.MainWindow"
-        x:DataType="vm:MainWindowViewModel"
+        x:DataType="vm:MainWindowViewModel" Icon="/Assets/icon.ico"
         Title="{Binding Title}" Width="1280" Height="800" WindowState="Maximized"
         Background="{StaticResource WindowBrush}"
         DragDrop.AllowDrop="True">

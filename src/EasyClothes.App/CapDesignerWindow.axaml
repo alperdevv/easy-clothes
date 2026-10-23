@@ -3,7 +3,7 @@
         xmlns:viewer="using:EasyClothes.App.Viewer"
         xmlns:vm="using:EasyClothes.App.ViewModels"
         x:Class="EasyClothes.App.CapDesignerWindow"
-        x:DataType="vm:CapDesignerViewModel"
+        x:DataType="vm:CapDesignerViewModel" Icon="/Assets/icon.ico"
         Title="{Binding Title}" Width="1100" Height="760" WindowStartupLocation="CenterOwner"
         Background="{StaticResource WindowBrush}">
   <Window.Styles>
