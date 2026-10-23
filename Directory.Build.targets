@@ -1,0 +1,6 @@
+<Project>
+  <!-- The runtime's crash dump helper is not needed to run the app and is a frequent antivirus false positive. -->
+  <Target Name="RemoveCreateDump" AfterTargets="Publish" Condition="'$(SelfContained)' == 'true'">
+    <Delete Files="$(PublishDir)createdump.exe;$(PublishDir)createdump" />
+  </Target>
+</Project>

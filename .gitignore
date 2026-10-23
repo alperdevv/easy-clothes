@@ -490,3 +490,6 @@ $RECYCLE.BIN/
 *.ymt
 *.yld
 *.ycd
+
+# Built installers
+dist/
