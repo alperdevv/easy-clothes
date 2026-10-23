@@ -13,8 +13,8 @@ public sealed record IssueViewModel(ValidationIssue Issue)
 
     public string Icon => Issue.Severity switch
     {
-        IssueSeverity.Error => "✕",
-        IssueSeverity.Warning => "!",
-        _ => "i",
+        IssueSeverity.Error => "Icon.CircleX",
+        IssueSeverity.Warning => "Icon.TriangleAlert",
+        _ => "Icon.Info",
     };
 }

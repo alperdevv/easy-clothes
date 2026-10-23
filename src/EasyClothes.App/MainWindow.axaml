@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:viewer="using:EasyClothes.App.Viewer"
+        xmlns:ui="using:EasyClothes.App.Controls"
         xmlns:vm="using:EasyClothes.App.ViewModels"
         x:Class="EasyClothes.App.MainWindow"
         x:DataType="vm:MainWindowViewModel" Icon="/Assets/icon.ico"
@@ -18,252 +19,402 @@
     <KeyBinding Gesture="Alt+Down" Command="{Binding MoveDownCommand}" />
   </Window.KeyBindings>
 
+  <Window.Styles>
+    <Style Selector="Border.count">
+      <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Padding" Value="7,0" />
+      <Setter Property="MinWidth" Value="22" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.count > TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.number">
+      <Setter Property="Foreground" Value="{StaticResource SubtleBrush}" />
+      <Setter Property="FontFamily" Value="Consolas,Menlo,monospace" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TreeViewItem:selected TextBlock.number">
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    </Style>
+  </Window.Styles>
+
   <DockPanel>
-    <Border DockPanel.Dock="Top" Classes="bar" BorderThickness="0,0,0,1">
-      <StackPanel Orientation="Horizontal" Spacing="6">
-        <Button Content="Nuevo" Command="{Binding NewProjectCommand}" ToolTip.Tip="Nuevo proyecto (Ctrl+N)" />
-        <Button Content="Abrir" Command="{Binding OpenProjectCommand}" ToolTip.Tip="Abrir proyecto (Ctrl+O)" />
-        <Button Content="Guardar" Command="{Binding SaveCommand}" ToolTip.Tip="Guardar (Ctrl+S)" />
-        <Button Content="Exportar proyecto" Command="{Binding PackProjectCommand}" ToolTip.Tip="Guardar el proyecto con todos sus archivos en un .ecpack" />
-        <Button Content="Importar proyecto" Command="{Binding UnpackProjectCommand}" ToolTip.Tip="Abrir un .ecpack en una carpeta nueva" />
-        <Rectangle Classes="separator" />
-        <Button Content="Importar prendas" Command="{Binding ImportCommand}" ToolTip.Tip="Importar .ydd con sus texturas (Ctrl+I). También puedes arrastrarlos a la ventana." />
-        <Button Content="Importar carpeta" Command="{Binding ImportFolderCommand}" ToolTip.Tip="Importar todas las prendas de una carpeta y sus subcarpetas (Ctrl+Mayús+I). Si es un recurso ya generado (con su .ymt), cada prenda conserva su número y sus opciones." />
-        <Button Content="Importar tatuajes" Command="{Binding ImportTattoosCommand}" ToolTip.Tip="Importar imágenes .png o .ytd como tatuajes" />
-        <Button Content="Importar modelo 3D" Command="{Binding ImportModelCommand}" ToolTip.Tip="Convierte tu propio modelo .obj (por ejemplo de Blender) en gorra, gafas o pendientes del juego" />
-        <Button Content="Nueva gorra" Command="{Binding NewCapCommand}" ToolTip.Tip="Crear desde cero una gorra, bucket, gorro de lana o visera: eliges modelo, forma y colores y lo puedes cambiar cuando quieras" />
-        <Button Content="Eliminar" Command="{Binding RemoveCommand}" />
-        <Rectangle Classes="separator" />
-        <Button Content="Generar recurso" Command="{Binding BuildResourceCommand}" ToolTip.Tip="Crear la carpeta del recurso de FiveM (Ctrl+B)" />
-        <Rectangle Classes="separator" />
-        <Button Content="Conectar con Claude" Command="{Binding ConnectClaudeCommand}" ToolTip.Tip="Deja que Claude (Desktop o Code) trabaje en tus proyectos con EasyClothes" />
-      </StackPanel>
+    <Border DockPanel.Dock="Top" Classes="bar" BorderThickness="0,0,0,1" Padding="10,6">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8" Margin="2,0,14,0">
+          <Image Source="/Assets/icon.ico" Width="22" Height="22" />
+          <TextBlock Text="EasyClothes" FontWeight="Bold" FontSize="15" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+          <Button Classes="flat" Command="{Binding ConnectClaudeCommand}" ToolTip.Tip="Deja que Claude (Desktop o Code) trabaje en tus proyectos con EasyClothes">
+            <ui:IconLabel Icon="{StaticResource Icon.Plug}" Text="Conectar con Claude" />
+          </Button>
+          <Button Classes="accent" Command="{Binding BuildResourceCommand}" ToolTip.Tip="Crear la carpeta del recurso de FiveM (Ctrl+B)">
+            <ui:IconLabel Icon="{StaticResource Icon.Hammer}" Text="Generar recurso" />
+          </Button>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal">
+          <StackPanel Classes="group">
+            <Button Classes="flat" Command="{Binding NewProjectCommand}" ToolTip.Tip="Nuevo proyecto (Ctrl+N)">
+              <ui:IconLabel Icon="{StaticResource Icon.FilePlus}" Text="Nuevo" />
+            </Button>
+            <Button Classes="flat" Command="{Binding OpenProjectCommand}" ToolTip.Tip="Abrir proyecto (Ctrl+O)">
+              <ui:IconLabel Icon="{StaticResource Icon.FolderOpen}" Text="Abrir" />
+            </Button>
+            <Button Classes="flat" Command="{Binding SaveCommand}" ToolTip.Tip="Guardar (Ctrl+S)">
+              <ui:IconLabel Icon="{StaticResource Icon.Save}" Text="Guardar" />
+            </Button>
+            <Button Classes="flat square" Command="{Binding PackProjectCommand}" ToolTip.Tip="Exportar proyecto: guardarlo con todos sus archivos en un .ecpack">
+              <ui:Icon Data="{StaticResource Icon.Package}" />
+            </Button>
+            <Button Classes="flat square" Command="{Binding UnpackProjectCommand}" ToolTip.Tip="Importar proyecto: abrir un .ecpack en una carpeta nueva">
+              <ui:Icon Data="{StaticResource Icon.PackageOpen}" />
+            </Button>
+          </StackPanel>
+          <Rectangle Classes="separator" />
+          <StackPanel Classes="group">
+            <DropDownButton Classes="flat" ToolTip.Tip="Añadir prendas, tatuajes o modelos. También puedes arrastrar archivos a la ventana.">
+              <ui:IconLabel Icon="{StaticResource Icon.Plus}" Text="Importar" />
+              <DropDownButton.Flyout>
+                <MenuFlyout Placement="BottomEdgeAlignedLeft">
+                  <MenuItem Header="Prendas (.ydd)…" InputGesture="Ctrl+I" Command="{Binding ImportCommand}"
+                            ToolTip.Tip="Importar .ydd con sus texturas">
+                    <MenuItem.Icon><ui:Icon Data="{StaticResource Icon.Shirt}" /></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="Carpeta…" InputGesture="Ctrl+Shift+I" Command="{Binding ImportFolderCommand}"
+                            ToolTip.Tip="Todas las prendas de una carpeta y sus subcarpetas. Si es un recurso ya generado (con su .ymt), cada prenda conserva su número y sus opciones.">
+                    <MenuItem.Icon><ui:Icon Data="{StaticResource Icon.FolderInput}" /></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="Tatuajes (.png, .ytd)…" Command="{Binding ImportTattoosCommand}">
+                    <MenuItem.Icon><ui:Icon Data="{StaticResource Icon.Stamp}" /></MenuItem.Icon>
+                  </MenuItem>
+                  <MenuItem Header="Modelo 3D (.obj)…" Command="{Binding ImportModelCommand}"
+                            ToolTip.Tip="Convierte tu propio modelo .obj (por ejemplo de Blender) en gorra, gafas o pendientes del juego">
+                    <MenuItem.Icon><ui:Icon Data="{StaticResource Icon.Box}" /></MenuItem.Icon>
+                  </MenuItem>
+                </MenuFlyout>
+              </DropDownButton.Flyout>
+            </DropDownButton>
+            <Button Classes="flat" Command="{Binding NewCapCommand}"
+                    ToolTip.Tip="Crear desde cero una gorra, bucket, gorro de lana o visera: eliges modelo, forma y colores y lo puedes cambiar cuando quieras">
+              <ui:IconLabel Icon="{StaticResource Icon.WandSparkles}" Text="Nueva gorra" />
+            </Button>
+            <Button Classes="flat square danger" Command="{Binding RemoveCommand}" ToolTip.Tip="Eliminar la prenda o el tatuaje seleccionado">
+              <ui:Icon Data="{StaticResource Icon.Trash2}" />
+            </Button>
+          </StackPanel>
+        </StackPanel>
+      </DockPanel>
     </Border>
 
-    <Border DockPanel.Dock="Bottom" Classes="bar" BorderThickness="0,1,0,0">
+    <Border DockPanel.Dock="Bottom" Classes="bar" BorderThickness="0,1,0,0" Padding="12,5">
       <TextBlock Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
     </Border>
 
-    <Grid RowDefinitions="*,4,180" ColumnDefinitions="280,4,*,4,320">
-      <DockPanel Grid.Row="0" Grid.Column="0">
-        <TextBlock DockPanel.Dock="Top" Classes="header" Text="PROYECTO" />
-        <Panel>
-          <TreeView ItemsSource="{Binding Tree}" SelectedItem="{Binding SelectedNode}" IsVisible="{Binding HasProject}">
-            <TreeView.ItemContainerTheme>
-              <ControlTheme TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}" x:DataType="vm:TreeNode">
-                <Setter Property="IsExpanded" Value="{Binding IsExpanded}" />
-              </ControlTheme>
-            </TreeView.ItemContainerTheme>
-            <TreeView.ItemTemplate>
-              <TreeDataTemplate DataType="vm:TreeNode" ItemsSource="{Binding Children}">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Classes="muted" Text="{Binding Number}" IsVisible="{Binding HasNumber}" FontFamily="Consolas,Menlo,monospace" />
-                  <TextBlock Text="{Binding Title}" />
-                </StackPanel>
-              </TreeDataTemplate>
-            </TreeView.ItemTemplate>
-          </TreeView>
-          <TextBlock Classes="muted" Margin="12" TextWrapping="Wrap" IsVisible="{Binding !HasProject}"
-                     Text="Crea un proyecto (Ctrl+N) o abre uno existente (Ctrl+O)." />
-        </Panel>
-      </DockPanel>
+    <Grid RowDefinitions="*,1,190" ColumnDefinitions="280,1,*,1,330">
+      <Border Grid.Row="0" Grid.Column="0" Classes="panel">
+        <DockPanel>
+          <ui:IconLabel DockPanel.Dock="Top" Classes="section" Margin="14,12,12,6" Icon="{StaticResource Icon.FolderTree}" Text="PROYECTO" />
+          <Panel>
+            <TreeView ItemsSource="{Binding Tree}" SelectedItem="{Binding SelectedNode}" IsVisible="{Binding HasProject}" Margin="4,0">
+              <TreeView.ItemContainerTheme>
+                <ControlTheme TargetType="TreeViewItem" BasedOn="{StaticResource {x:Type TreeViewItem}}" x:DataType="vm:TreeNode">
+                  <Setter Property="IsExpanded" Value="{Binding IsExpanded}" />
+                </ControlTheme>
+              </TreeView.ItemContainerTheme>
+              <TreeView.ItemTemplate>
+                <TreeDataTemplate DataType="vm:TreeNode" ItemsSource="{Binding Children}">
+                  <DockPanel>
+                    <Border DockPanel.Dock="Right" Classes="count" Margin="8,0,6,0" IsVisible="{Binding Count, Converter={x:Static ObjectConverters.IsNotNull}}">
+                      <TextBlock Text="{Binding Count}" />
+                    </Border>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <ui:Icon Classes="muted" Size="15" Data="{Binding Icon, Converter={x:Static ui:IconConverter.Instance}}"
+                               IsVisible="{Binding Icon, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      <TextBlock Classes="number" Text="{Binding Number}" IsVisible="{Binding HasNumber}" />
+                      <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </DockPanel>
+                </TreeDataTemplate>
+              </TreeView.ItemTemplate>
+            </TreeView>
+            <TextBlock Classes="muted" Margin="14,4" TextWrapping="Wrap" VerticalAlignment="Top" IsVisible="{Binding !HasProject}"
+                       Text="Aquí verás las prendas del proyecto, agrupadas por sexo y hueco." />
+          </Panel>
+        </DockPanel>
+      </Border>
 
       <GridSplitter Grid.Row="0" Grid.Column="1" Classes="vertical" />
 
       <DockPanel Grid.Row="0" Grid.Column="2">
         <Border DockPanel.Dock="Top" Classes="bar" BorderThickness="0,0,0,1">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBlock Classes="muted" Text="Textura" VerticalAlignment="Center" />
-            <ComboBox ItemsSource="{Binding Selected.Textures, FallbackValue={x:Null}}" SelectedItem="{Binding SelectedTexture}"
-                      IsEnabled="{Binding HasSelection}" MinWidth="220">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:TextureItem">
-                  <TextBlock>
-                    <Run Text="{Binding Letter}" FontWeight="SemiBold" />
-                    <Run Text="  " />
-                    <Run Text="{Binding FileName}" />
-                  </TextBlock>
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <Button Content="Editar textura" Command="{Binding EditTextureCommand}"
-                    ToolTip.Tip="Color, logos, pincel o tu editor de imágenes, con vista previa al momento" />
-            <ComboBox x:Name="ShadingBox" SelectedIndex="0" Width="170" SelectionChanged="OnShadingChanged">
-              <ComboBoxItem Content="Sólido" />
-              <ComboBoxItem Content="Alámbrico" />
-              <ComboBoxItem Content="Sólido + alámbrico" />
-            </ComboBox>
-            <Button Content="Centrar" Click="OnResetCamera" />
-            <ToggleButton Content="Personaje" IsChecked="{Binding ShowBody}" ToolTip.Tip="{Binding BodyTip}" />
-            <Button Content="…" Command="{Binding ChooseBodyFolderCommand}" ToolTip.Tip="Elegir la carpeta del personaje" />
-          </StackPanel>
-        </Border>
-        <Border DockPanel.Dock="Bottom" Padding="10,4">
           <DockPanel>
-            <TextBlock DockPanel.Dock="Right" Classes="muted" FontSize="11"
-                       Text="Arrastrar: girar · Clic derecho o Mayús: mover · Rueda: zoom · Doble clic: centrar" />
-            <TextBlock x:Name="PreviewStatus" Classes="muted" />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2">
+              <ComboBox x:Name="ShadingBox" SelectedIndex="0" Width="170" SelectionChanged="OnShadingChanged" Margin="0,0,6,0">
+                <ComboBoxItem Content="Sólido" />
+                <ComboBoxItem Content="Alámbrico" />
+                <ComboBoxItem Content="Sólido + alámbrico" />
+              </ComboBox>
+              <ToggleButton Classes="flat" IsChecked="{Binding ShowBody}" ToolTip.Tip="{Binding BodyTip}">
+                <ui:IconLabel Icon="{StaticResource Icon.PersonStanding}" Text="Personaje" />
+              </ToggleButton>
+              <Button Classes="flat square" Command="{Binding ChooseBodyFolderCommand}" ToolTip.Tip="Elegir la carpeta del personaje">
+                <ui:Icon Data="{StaticResource Icon.Folder}" />
+              </Button>
+              <Button Classes="flat square" Click="OnResetCamera" ToolTip.Tip="Centrar la cámara (doble clic en la vista)">
+                <ui:Icon Data="{StaticResource Icon.Focus}" />
+              </Button>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <ui:Icon Classes="muted" Data="{StaticResource Icon.Image}" Margin="4,0,0,0" />
+              <ComboBox ItemsSource="{Binding Selected.Textures, FallbackValue={x:Null}}" SelectedItem="{Binding SelectedTexture}"
+                        IsEnabled="{Binding HasSelection}" MinWidth="220" PlaceholderText="Textura">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:TextureItem">
+                    <TextBlock>
+                      <Run Text="{Binding Letter}" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" />
+                      <Run Text="  " />
+                      <Run Text="{Binding FileName}" />
+                    </TextBlock>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <Button Classes="flat" Command="{Binding EditTextureCommand}"
+                      ToolTip.Tip="Color, logos, pincel o tu editor de imágenes, con vista previa al momento">
+                <ui:IconLabel Icon="{StaticResource Icon.Paintbrush}" Text="Editar textura" />
+              </Button>
+            </StackPanel>
           </DockPanel>
         </Border>
-        <viewer:MeshViewport x:Name="Viewport" />
+        <Panel>
+          <viewer:MeshViewport x:Name="Viewport" />
+          <Border Classes="overlay" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                  IsVisible="{Binding #PreviewStatus.Text, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <TextBlock x:Name="PreviewStatus" Classes="muted" />
+          </Border>
+          <Border Classes="overlay" HorizontalAlignment="Right" VerticalAlignment="Bottom" IsVisible="{Binding HasProject}">
+            <TextBlock Classes="muted" FontSize="11" Text="Arrastrar: girar · Clic derecho o Mayús: mover · Rueda: zoom · Doble clic: centrar" />
+          </Border>
+
+          <Border IsVisible="{Binding !HasProject}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                  Background="#E61A1B1F" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="12" Padding="32,28" MaxWidth="420">
+            <StackPanel Spacing="10">
+              <Border Background="{StaticResource AccentSoftBrush}" CornerRadius="14" Width="56" Height="56" HorizontalAlignment="Center">
+                <ui:Icon Data="{StaticResource Icon.Shirt}" Size="28" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" />
+              </Border>
+              <TextBlock Text="Empieza un pack de ropa" FontSize="18" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,6,0,0" />
+              <TextBlock Classes="muted" TextWrapping="Wrap" TextAlignment="Center"
+                         Text="Crea un proyecto o abre uno existente. Luego arrastra aquí tus .ydd y sus texturas." />
+              <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" Margin="0,10,0,0">
+                <Button Classes="accent" Command="{Binding NewProjectCommand}">
+                  <ui:IconLabel Icon="{StaticResource Icon.FilePlus}" Text="Nuevo proyecto" />
+                </Button>
+                <Button Command="{Binding OpenProjectCommand}">
+                  <ui:IconLabel Icon="{StaticResource Icon.FolderOpen}" Text="Abrir…" />
+                </Button>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </Panel>
       </DockPanel>
 
       <GridSplitter Grid.Row="0" Grid.Column="3" Classes="vertical" />
 
-      <ScrollViewer Grid.Row="0" Grid.Column="4">
-        <StackPanel Spacing="4">
-          <TextBlock Classes="header" Text="PROYECTO" IsVisible="{Binding HasProject}" />
-          <StackPanel Classes="form" IsVisible="{Binding HasProject}">
-            <TextBlock Classes="label" Text="Nombre de colección" />
-            <TextBox Text="{Binding CollectionName}" />
-          </StackPanel>
+      <Border Grid.Row="0" Grid.Column="4" Classes="panel">
+        <ScrollViewer>
+          <StackPanel Margin="0,10,0,0">
+            <Border Classes="card" IsVisible="{Binding HasProject}">
+              <StackPanel>
+                <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Package}" Text="PROYECTO" />
+                <TextBlock Classes="label" Text="Nombre de colección" />
+                <TextBox Text="{Binding CollectionName}" />
+              </StackPanel>
+            </Border>
 
-          <TextBlock Classes="header" Text="PRENDA" IsVisible="{Binding HasSelection}" />
-          <StackPanel Classes="form" DataContext="{Binding Selected}" IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).HasSelection}"
-                      x:DataType="vm:DrawableViewModel">
-            <TextBlock Classes="label" Text="Nombre" />
-            <TextBox Text="{Binding Name}" />
-            <TextBlock Classes="label" Text="Género" />
-            <ComboBox ItemsSource="{x:Static vm:GenderOption.All}" SelectedItem="{Binding Gender}" HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:GenderOption">
-                  <TextBlock Text="{Binding Label}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBlock Classes="label" Text="Hueco" />
-            <ComboBox ItemsSource="{x:Static vm:SlotOption.All}" SelectedItem="{Binding Slot}" HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:SlotOption">
-                  <TextBlock Text="{Binding Display}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <DockPanel Margin="0,6,0,0">
-              <Button DockPanel.Dock="Right" Classes="small" Content="▼" Margin="4,0,0,0" ToolTip.Tip="Bajar un número (Alt+↓)"
-                      Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoveDownCommand}" />
-              <Button DockPanel.Dock="Right" Classes="small" Content="▲" ToolTip.Tip="Subir un número (Alt+↑)"
-                      Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoveUpCommand}" />
-              <TextBlock Classes="muted" Text="{Binding NumberLabel}" VerticalAlignment="Center" />
-            </DockPanel>
-            <Button Classes="small" Content="Reservar un número más en este hueco" HorizontalAlignment="Stretch"
-                    ToolTip.Tip="Deja un número libre al final para una prenda futura, así los números de las demás no cambian"
-                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ReserveSlotCommand}" />
-            <StackPanel IsVisible="{Binding IsReserved}" Spacing="6" Margin="0,8,0,0">
-              <TextBlock Classes="muted" TextWrapping="Wrap"
-                         Text="Número reservado: en el juego existe pero no muestra nada hasta que le asignes una prenda." />
-              <Button Content="Asignar prenda…" HorizontalAlignment="Stretch"
-                      Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).FillReservedCommand}" />
-            </StackPanel>
-            <StackPanel IsVisible="{Binding HasExtras}" Spacing="2">
-              <TextBlock Classes="label" Text="Primera persona" />
-              <DockPanel ToolTip.Tip="Modelo que se ve desde la cámara en primera persona (…_1.ydd), por ejemplo una capucha recortada para que no tape la vista">
-                <Button DockPanel.Dock="Right" Classes="small" Content="Quitar" Margin="4,0,0,0" IsVisible="{Binding HasFirstPerson}"
-                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ClearFirstPersonCommand}" />
-                <Button DockPanel.Dock="Right" Classes="small" Content="Elegir…"
-                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChooseFirstPersonCommand}" />
-                <TextBlock Classes="muted" Text="{Binding FirstPersonLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-              </DockPanel>
-              <TextBlock Classes="label" Text="Físicas de tela" />
-              <DockPanel ToolTip.Tip="Simulación de tela (.yld) para faldas, capas o abrigos que se mueven al andar">
-                <Button DockPanel.Dock="Right" Classes="small" Content="Quitar" Margin="4,0,0,0" IsVisible="{Binding HasClothPhysics}"
-                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ClearClothPhysicsCommand}" />
-                <Button DockPanel.Dock="Right" Classes="small" Content="Elegir…"
-                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChooseClothPhysicsCommand}" />
-                <TextBlock Classes="muted" Text="{Binding ClothPhysicsLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-              </DockPanel>
-            </StackPanel>
-            <StackPanel IsVisible="{Binding IsShoes}" Spacing="4" Margin="0,8,0,0">
-              <DockPanel>
-                <Button DockPanel.Dock="Right" Classes="small" Content="Detectar" ToolTip.Tip="Calcula la altura midiendo la suela del modelo"
-                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).DetectHeelCommand}" />
-                <CheckBox Content="Tacones" IsChecked="{Binding HasHeels}"
-                          ToolTip.Tip="Levanta al personaje para que el tacón no atraviese el suelo y usa el sonido de pisada de tacón" />
-              </DockPanel>
-              <NumericUpDown Value="{Binding HeelHeight}" Increment="0.1" Minimum="0.1" Maximum="3" FormatString="0.0" IsVisible="{Binding HasHeels}"
-                             ToolTip.Tip="1 es la altura de los tacones del juego (suela unos 9 cm más baja)" />
-            </StackPanel>
-            <Button Content="Colocar modelo importado…" HorizontalAlignment="Stretch" Margin="0,8,0,0" IsVisible="{Binding IsImportedModel}"
-                    ToolTip.Tip="Mover, girar o escalar el modelo .obj sobre la cabeza"
-                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).PlaceImportedModelCommand}" />
-            <Button Content="Editar gorra…" HorizontalAlignment="Stretch" Margin="0,8,0,0" IsVisible="{Binding IsGeneratedCap}"
-                    ToolTip.Tip="Cambiar la forma (las texturas siguen encajando) o crear otra textura con otros colores"
-                    Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).EditCapCommand}" />
-            <StackPanel IsVisible="{Binding IsHat}" Spacing="2" Margin="0,8,0,0">
-              <TextBlock Classes="label" Text="Pelo bajo el sombrero" />
-              <ComboBox ItemsSource="{x:Static vm:DrawableViewModel.HatHairOptions}" SelectedIndex="{Binding HatHairIndex}" HorizontalAlignment="Stretch"
-                        ToolTip.Tip="Solo afecta a peinados preparados para ello, como los del juego" />
-            </StackPanel>
-            <TextBlock Classes="label" Text="{Binding Summary}" Margin="0,12,0,0" IsVisible="{Binding IsGarment}" />
-            <ItemsControl ItemsSource="{Binding Textures}" IsVisible="{Binding IsGarment}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:TextureItem">
-                  <Grid ColumnDefinitions="18,*">
-                    <TextBlock Classes="muted" Text="{Binding Letter}" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="1" Classes="muted" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" />
-                  </Grid>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
+            <Border Classes="card" IsVisible="{Binding HasSelection}">
+              <StackPanel DataContext="{Binding Selected}" x:DataType="vm:DrawableViewModel">
+                <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Shirt}" Text="PRENDA" />
+                <TextBlock Classes="label" Text="Nombre" />
+                <TextBox Text="{Binding Name}" />
+                <TextBlock Classes="label" Text="Género" />
+                <ComboBox ItemsSource="{x:Static vm:GenderOption.All}" SelectedItem="{Binding Gender}" HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GenderOption">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <TextBlock Classes="label" Text="Hueco" />
+                <ComboBox ItemsSource="{x:Static vm:SlotOption.All}" SelectedItem="{Binding Slot}" HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SlotOption">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <ui:Icon Classes="muted" Size="14" Data="{Binding Icon, Converter={x:Static ui:IconConverter.Instance}}" />
+                        <TextBlock Text="{Binding Display}" />
+                      </StackPanel>
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <DockPanel Margin="0,10,0,0">
+                  <Button DockPanel.Dock="Right" Classes="flat square" Margin="2,0,0,0" ToolTip.Tip="Bajar un número (Alt+↓)"
+                          Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoveDownCommand}">
+                    <ui:Icon Data="{StaticResource Icon.ChevronDown}" />
+                  </Button>
+                  <Button DockPanel.Dock="Right" Classes="flat square" ToolTip.Tip="Subir un número (Alt+↑)"
+                          Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).MoveUpCommand}">
+                    <ui:Icon Data="{StaticResource Icon.ChevronUp}" />
+                  </Button>
+                  <TextBlock Classes="muted" Text="{Binding NumberLabel}" VerticalAlignment="Center" />
+                </DockPanel>
+                <Button Classes="small" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,4,0,0"
+                        ToolTip.Tip="Deja un número libre al final para una prenda futura, así los números de las demás no cambian"
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ReserveSlotCommand}">
+                  <ui:IconLabel Icon="{StaticResource Icon.BookmarkPlus}" IconSize="14" Text="Reservar un número más en este hueco" />
+                </Button>
+                <StackPanel IsVisible="{Binding IsReserved}" Spacing="6" Margin="0,8,0,0">
+                  <TextBlock Classes="muted" TextWrapping="Wrap"
+                             Text="Número reservado: en el juego existe pero no muestra nada hasta que le asignes una prenda." />
+                  <Button Classes="accent" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                          Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).FillReservedCommand}">
+                    <ui:IconLabel Icon="{StaticResource Icon.Plus}" Text="Asignar prenda…" />
+                  </Button>
+                </StackPanel>
+                <StackPanel IsVisible="{Binding HasExtras}" Spacing="2">
+                  <TextBlock Classes="label" Text="Primera persona" />
+                  <DockPanel ToolTip.Tip="Modelo que se ve desde la cámara en primera persona (…_1.ydd), por ejemplo una capucha recortada para que no tape la vista">
+                    <Button DockPanel.Dock="Right" Classes="small" Content="Quitar" Margin="4,0,0,0" IsVisible="{Binding HasFirstPerson}"
+                            Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ClearFirstPersonCommand}" />
+                    <Button DockPanel.Dock="Right" Classes="small" Content="Elegir…"
+                            Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChooseFirstPersonCommand}" />
+                    <TextBlock Classes="muted" Text="{Binding FirstPersonLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  </DockPanel>
+                  <TextBlock Classes="label" Text="Físicas de tela" />
+                  <DockPanel ToolTip.Tip="Simulación de tela (.yld) para faldas, capas o abrigos que se mueven al andar">
+                    <Button DockPanel.Dock="Right" Classes="small" Content="Quitar" Margin="4,0,0,0" IsVisible="{Binding HasClothPhysics}"
+                            Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ClearClothPhysicsCommand}" />
+                    <Button DockPanel.Dock="Right" Classes="small" Content="Elegir…"
+                            Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ChooseClothPhysicsCommand}" />
+                    <TextBlock Classes="muted" Text="{Binding ClothPhysicsLabel}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  </DockPanel>
+                </StackPanel>
+                <StackPanel IsVisible="{Binding IsShoes}" Spacing="4" Margin="0,8,0,0">
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Classes="small" Content="Detectar" ToolTip.Tip="Calcula la altura midiendo la suela del modelo"
+                            Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).DetectHeelCommand}" />
+                    <CheckBox Content="Tacones" IsChecked="{Binding HasHeels}"
+                              ToolTip.Tip="Levanta al personaje para que el tacón no atraviese el suelo y usa el sonido de pisada de tacón" />
+                  </DockPanel>
+                  <NumericUpDown Value="{Binding HeelHeight}" Increment="0.1" Minimum="0.1" Maximum="3" FormatString="0.0" IsVisible="{Binding HasHeels}"
+                                 ToolTip.Tip="1 es la altura de los tacones del juego (suela unos 9 cm más baja)" />
+                </StackPanel>
+                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,10,0,0" IsVisible="{Binding IsImportedModel}"
+                        ToolTip.Tip="Mover, girar o escalar el modelo .obj sobre la cabeza"
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).PlaceImportedModelCommand}">
+                  <ui:IconLabel Icon="{StaticResource Icon.Move3d}" Text="Colocar modelo importado…" />
+                </Button>
+                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,10,0,0" IsVisible="{Binding IsGeneratedCap}"
+                        ToolTip.Tip="Cambiar la forma (las texturas siguen encajando) o crear otra textura con otros colores"
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).EditCapCommand}">
+                  <ui:IconLabel Icon="{StaticResource Icon.WandSparkles}" Text="Editar gorra…" />
+                </Button>
+                <StackPanel IsVisible="{Binding IsHat}" Spacing="2" Margin="0,8,0,0">
+                  <TextBlock Classes="label" Text="Pelo bajo el sombrero" />
+                  <ComboBox ItemsSource="{x:Static vm:DrawableViewModel.HatHairOptions}" SelectedIndex="{Binding HatHairIndex}" HorizontalAlignment="Stretch"
+                            ToolTip.Tip="Solo afecta a peinados preparados para ello, como los del juego" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
 
-          <TextBlock Classes="header" Text="TATUAJE" IsVisible="{Binding HasTattooSelection}" />
-          <StackPanel Classes="form" DataContext="{Binding SelectedTattoo}" IsVisible="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).HasTattooSelection}"
-                      x:DataType="vm:TattooViewModel">
-            <TextBlock Classes="label" Text="Nombre" />
-            <TextBox Text="{Binding Name}" />
-            <TextBlock Classes="label" Text="Zona" />
-            <ComboBox ItemsSource="{x:Static vm:TattooZoneOption.All}" SelectedItem="{Binding Zone}" HorizontalAlignment="Stretch">
-              <ComboBox.ItemTemplate>
-                <DataTemplate x:DataType="vm:TattooZoneOption">
-                  <TextBlock Text="{Binding Label}" />
-                </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,6,0,0">
-              <CheckBox Content="Hombre" IsChecked="{Binding IsMale}" />
-              <CheckBox Content="Mujer" IsChecked="{Binding IsFemale}" />
-            </StackPanel>
-            <TextBlock Classes="label" Text="Posición (UV)" />
-            <Grid ColumnDefinitions="*,6,*">
-              <NumericUpDown Value="{Binding UvX}" Increment="0.01" FormatString="0.000" ToolTip.Tip="X" />
-              <NumericUpDown Grid.Column="2" Value="{Binding UvY}" Increment="0.01" FormatString="0.000" ToolTip.Tip="Y" />
-            </Grid>
-            <TextBlock Classes="label" Text="Escala" />
-            <Grid ColumnDefinitions="*,6,*">
-              <NumericUpDown Value="{Binding ScaleX}" Increment="0.05" Minimum="0.01" FormatString="0.000" ToolTip.Tip="X" />
-              <NumericUpDown Grid.Column="2" Value="{Binding ScaleY}" Increment="0.05" Minimum="0.01" FormatString="0.000" ToolTip.Tip="Y" />
-            </Grid>
-            <TextBlock Classes="label" Text="Rotación (grados)" />
-            <NumericUpDown Value="{Binding Rotation}" Increment="5" Minimum="-360" Maximum="360" FormatString="0.0" />
-            <TextBlock Classes="muted" Text="{Binding FileName}" Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
+            <Border Classes="card" IsVisible="{Binding Selected.IsGarment, FallbackValue=False}">
+              <StackPanel DataContext="{Binding Selected}" x:DataType="vm:DrawableViewModel">
+                <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Palette}" Text="{Binding Summary}" />
+                <ItemsControl ItemsSource="{Binding Textures}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TextureItem">
+                      <Grid ColumnDefinitions="22,*" Margin="0,2">
+                        <TextBlock Text="{Binding Letter}" FontWeight="SemiBold" FontSize="12" Foreground="{StaticResource AccentBrush}" />
+                        <TextBlock Grid.Column="1" Classes="muted" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card" IsVisible="{Binding HasTattooSelection}">
+              <StackPanel DataContext="{Binding SelectedTattoo}" x:DataType="vm:TattooViewModel">
+                <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Stamp}" Text="TATUAJE" />
+                <TextBlock Classes="label" Text="Nombre" />
+                <TextBox Text="{Binding Name}" />
+                <TextBlock Classes="label" Text="Zona" />
+                <ComboBox ItemsSource="{x:Static vm:TattooZoneOption.All}" SelectedItem="{Binding Zone}" HorizontalAlignment="Stretch">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TattooZoneOption">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
+                <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,6,0,0">
+                  <CheckBox Content="Hombre" IsChecked="{Binding IsMale}" />
+                  <CheckBox Content="Mujer" IsChecked="{Binding IsFemale}" />
+                </StackPanel>
+                <TextBlock Classes="label" Text="Posición (UV)" />
+                <Grid ColumnDefinitions="*,6,*">
+                  <NumericUpDown Value="{Binding UvX}" Increment="0.01" FormatString="0.000" ToolTip.Tip="X" />
+                  <NumericUpDown Grid.Column="2" Value="{Binding UvY}" Increment="0.01" FormatString="0.000" ToolTip.Tip="Y" />
+                </Grid>
+                <TextBlock Classes="label" Text="Escala" />
+                <Grid ColumnDefinitions="*,6,*">
+                  <NumericUpDown Value="{Binding ScaleX}" Increment="0.05" Minimum="0.01" FormatString="0.000" ToolTip.Tip="X" />
+                  <NumericUpDown Grid.Column="2" Value="{Binding ScaleY}" Increment="0.05" Minimum="0.01" FormatString="0.000" ToolTip.Tip="Y" />
+                </Grid>
+                <TextBlock Classes="label" Text="Rotación (grados)" />
+                <NumericUpDown Value="{Binding Rotation}" Increment="5" Minimum="-360" Maximum="360" FormatString="0.0" />
+                <TextBlock Classes="muted" Text="{Binding FileName}" Margin="0,8,0,0" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Border>
           </StackPanel>
-        </StackPanel>
-      </ScrollViewer>
+        </ScrollViewer>
+      </Border>
 
       <GridSplitter Grid.Row="1" Grid.ColumnSpan="5" Classes="horizontal" />
 
-      <DockPanel Grid.Row="2" Grid.ColumnSpan="5">
-        <Border DockPanel.Dock="Top" Classes="bar" BorderThickness="0,0,0,1">
+      <DockPanel Grid.Row="2" Grid.ColumnSpan="5" Background="{StaticResource PanelBrush}">
+        <Border DockPanel.Dock="Top" Padding="14,8,10,4">
           <DockPanel>
-            <Button DockPanel.Dock="Right" Content="Corregir todo" Command="{Binding FixAllCommand}"
-                    IsVisible="{Binding HasFixes}" ToolTip.Tip="Aplica todas las correcciones automáticas (se guarda copia en .backups)" />
-            <StackPanel Orientation="Horizontal" Spacing="10">
-              <TextBlock Classes="header-inline" Text="PROBLEMAS" />
+            <Button DockPanel.Dock="Right" Classes="small accent" Command="{Binding FixAllCommand}"
+                    IsVisible="{Binding HasFixes}" ToolTip.Tip="Aplica todas las correcciones automáticas (se guarda copia en .backups)">
+              <ui:IconLabel Icon="{StaticResource Icon.Wrench}" IconSize="14" Text="Corregir todo" />
+            </Button>
+            <StackPanel Orientation="Horizontal" Spacing="12">
+              <ui:IconLabel Classes="section" Margin="0" Icon="{StaticResource Icon.TriangleAlert}" Text="PROBLEMAS" />
               <TextBlock Classes="muted" Text="{Binding IssueSummary}" />
             </StackPanel>
           </DockPanel>
         </Border>
-        <ListBox ItemsSource="{Binding Issues}" x:Name="IssuesList" DoubleTapped="OnIssueActivated">
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="10" Margin="16,14" IsVisible="{Binding IsClean}">
+          <ui:Icon Classes="success" Size="18" Data="{StaticResource Icon.CircleCheck}" />
+          <TextBlock Classes="muted" FontSize="13" Text="Todo listo: el proyecto no tiene problemas para generar el recurso." />
+        </StackPanel>
+        <ListBox ItemsSource="{Binding Issues}" x:Name="IssuesList" DoubleTapped="OnIssueActivated" Margin="4,0,4,4">
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:IssueViewModel">
               <DockPanel>
-                <Button DockPanel.Dock="Right" Classes="small" Content="{Binding FixLabel}" IsVisible="{Binding HasFix}"
-                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ApplyFixCommand}" CommandParameter="{Binding}" />
-                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                  <TextBlock Text="{Binding Icon}" Width="14" TextAlignment="Center"
-                             Classes.error="{Binding IsError}" Classes.warning="{Binding IsWarning}" Classes.info="{Binding IsInfo}" />
-                  <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+                <Button DockPanel.Dock="Right" Classes="small" IsVisible="{Binding HasFix}"
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).ApplyFixCommand}" CommandParameter="{Binding}">
+                  <ui:IconLabel Icon="{StaticResource Icon.Wrench}" IconSize="13" Text="{Binding FixLabel}" />
+                </Button>
+                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                  <ui:Icon Size="15" Data="{Binding Icon, Converter={x:Static ui:IconConverter.Instance}}"
+                           Classes.error="{Binding IsError}" Classes.warning="{Binding IsWarning}" Classes.info="{Binding IsInfo}" />
+                  <TextBlock Text="{Binding Message}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </StackPanel>
               </DockPanel>
             </DataTemplate>

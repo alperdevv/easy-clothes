@@ -3,7 +3,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace EasyClothes.App.ViewModels;
 
-public sealed partial class TreeNode(string title, DrawableViewModel? drawable = null, TattooViewModel? tattoo = null, string? number = null) : ObservableObject
+public sealed partial class TreeNode(string title, DrawableViewModel? drawable = null, TattooViewModel? tattoo = null, string? number = null,
+    string? icon = null, int? count = null) : ObservableObject
 {
     [ObservableProperty]
     public partial string Title { get; set; } = title;
@@ -13,6 +14,10 @@ public sealed partial class TreeNode(string title, DrawableViewModel? drawable =
     // In-game number of a garment, shown before its name.
     public string? Number { get; } = number;
     public bool HasNumber => Number is not null;
+
+    // Key of a resource in Icons.axaml, for group rows.
+    public string? Icon { get; } = icon;
+    public int? Count { get; } = count;
     public TattooViewModel? Tattoo { get; } = tattoo;
     public ObservableCollection<TreeNode> Children { get; } = [];
     public bool IsExpanded { get; set; } = true;

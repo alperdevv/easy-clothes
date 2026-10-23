@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using EasyClothes.App.Controls;
 using EasyClothes.App.ViewModels;
 using EasyClothes.App.Viewer;
 using EasyClothes.Core.Importing;
@@ -112,11 +113,11 @@ public sealed class MainWindowTests : IDisposable
         }
 
         Assert.Equal("rosa", window.ViewModel.SelectedTattoo?.Name);
-        Assert.Equal("Tatuajes (1)", window.ViewModel.Tree.Single().Title);
+        Assert.Equal("Tatuajes (1)", Row(window.ViewModel.Tree.Single()));
         Assert.Equal("8x4", window.ViewModel.Preview?.Status);
-        Assert.Equal("Torso (1)", window.ViewModel.Tree.Single().Children.Single().Title);
+        Assert.Equal("Torso (1)", Row(window.ViewModel.Tree.Single().Children.Single()));
         window.ViewModel.SelectedTattoo!.Zone = TattooZoneOption.All.Single(z => z.Value == TattooZone.LeftArm);
-        Assert.Equal("Brazo izquierdo (1)", window.ViewModel.Tree.Single().Children.Single().Title);
+        Assert.Equal("Brazo izquierdo (1)", Row(window.ViewModel.Tree.Single().Children.Single()));
         Assert.Equal("rosa", window.ViewModel.SelectedTattoo?.Name);
         window.ViewModel.SelectedTattoo!.UvX = 0.3m;
         window.ViewModel.SelectedTattoo.IsFemale = false;
@@ -252,7 +253,7 @@ public sealed class MainWindowTests : IDisposable
         Assert.Equal(["000 a", "001 c", "002 b", "003 reservado 1"], TopNodes(vm));
         Assert.True(vm.Selected?.IsReserved);
         Dispatcher.UIThread.RunJobs();
-        Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => Equals(b.Content, "Asignar prenda…") && b.IsEffectivelyVisible);
+        Assert.Contains(window.GetVisualDescendants().OfType<Button>(), b => b.Content is IconLabel { Text: "Asignar prenda…" } && b.IsEffectivelyVisible);
         Assert.DoesNotContain(vm.Issues, i => i.Message.Contains("reservado"));
     }
 
@@ -367,7 +368,8 @@ public sealed class MainWindowTests : IDisposable
         var window = new MainWindow { Width = 1200, Height = 800 };
         window.Show();
         var viewport = window.FindControl<MeshViewport>("Viewport")!;
-        var centre = viewport.TranslatePoint(new Point(viewport.Bounds.Width / 2, viewport.Bounds.Height / 2), window)!.Value;
+        // Above the welcome card that covers the middle of the view while there is no project.
+        var centre = viewport.TranslatePoint(new Point(viewport.Bounds.Width / 2, viewport.Bounds.Height / 6), window)!.Value;
 
         window.MouseDown(centre, MouseButton.Left);
         window.MouseMove(centre + new Point(80, 30));
@@ -422,6 +424,8 @@ public sealed class MainWindowTests : IDisposable
         Directory.CreateDirectory(dir);
         window.CaptureRenderedFrame()?.Save(Path.Combine(dir, name), new Avalonia.Media.Imaging.PngBitmapEncoderOptions());
     }
+
+    private static string Row(TreeNode node) => $"{node.Title} ({node.Count})";
 
     private static List<string> TopNodes(MainWindowViewModel vm) =>
         vm.Tree.SelectMany(g => g.Children).SelectMany(s => s.Children).Select(n => $"{n.Number} {n.Title}").ToList();

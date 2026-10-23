@@ -18,7 +18,7 @@ public sealed class TextureCanvas : Control
     private const double MaxScale = 32;
     private static readonly IBrush CheckerLight = new SolidColorBrush(Color.FromRgb(0x3A, 0x3D, 0x44));
     private static readonly IBrush CheckerDark = new SolidColorBrush(Color.FromRgb(0x2C, 0x2F, 0x35));
-    private static readonly IPen SelectionPen = new Pen(new SolidColorBrush(Color.FromRgb(0x5A, 0xB4, 0xFF)), 1.5, DashStyle.Dash);
+    private static readonly IPen SelectionPen = new Pen(new SolidColorBrush(Color.FromRgb(0xFF, 0x8A, 0x1F)), 1.5, DashStyle.Dash);
     private static readonly IPen BorderPen = new Pen(new SolidColorBrush(Color.FromArgb(0x60, 0, 0, 0)), 1);
     private static readonly IPen BrushPen = new Pen(Brushes.White, 1);
     private static readonly IPen BrushShadowPen = new Pen(Brushes.Black, 1);

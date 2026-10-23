@@ -38,6 +38,26 @@ public sealed record SlotOption(string Label, SlotRef Slot)
     ];
 
     public bool IsProp => Slot.Prop is not null;
+
+    public string Icon => Slot switch
+    {
+        { Component: ComponentSlot.Head } => "Icon.Smile",
+        { Component: ComponentSlot.Mask } => "Icon.VenetianMask",
+        { Component: ComponentSlot.Hair } => "Icon.Scissors",
+        { Component: ComponentSlot.Torso } => "Icon.Hand",
+        { Component: ComponentSlot.Legs } => "Icon.Pants",
+        { Component: ComponentSlot.Bag } => "Icon.Backpack",
+        { Component: ComponentSlot.Shoes } => "Icon.Footprints",
+        { Component: ComponentSlot.Accessory } => "Icon.Gem",
+        { Component: ComponentSlot.Armor } => "Icon.Shield",
+        { Component: ComponentSlot.Decal } => "Icon.Sticker",
+        { Component: ComponentSlot.Undershirt or ComponentSlot.Top } => "Icon.Shirt",
+        { Prop: PropSlot.Hat } => "Icon.HardHat",
+        { Prop: PropSlot.Glasses } => "Icon.Glasses",
+        { Prop: PropSlot.Ears } => "Icon.Ear",
+        { Prop: PropSlot.Watch } => "Icon.Watch",
+        _ => "Icon.CircleDot",
+    };
     public string Display => $"{Label} ({Slot.FileCode})";
 
     public static SlotOption For(Drawable d) => All.First(o => o.Slot == new SlotRef(d.Component, d.Prop));

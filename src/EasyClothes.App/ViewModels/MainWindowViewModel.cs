@@ -31,11 +31,11 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     public partial bool IsBusy { get; private set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IssueSummary))]
+    [NotifyPropertyChangedFor(nameof(IssueSummary), nameof(IsClean))]
     public partial bool IsAnalyzing { get; private set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasProject), nameof(Title))]
+    [NotifyPropertyChangedFor(nameof(HasProject), nameof(Title), nameof(IsClean))]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     public partial ClothingProject? Project { get; private set; }
 
@@ -115,6 +115,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     public bool HasProject => Project is not null;
     private bool CanImport => !IsBusy;
     public bool HasFixes => Issues.Any(i => i.HasFix);
+    public bool IsClean => HasProject && !IsAnalyzing && Issues.Count == 0;
     private bool CanFix => !IsBusy && ProjectDir is not null;
     public bool HasSelection => Selected is not null;
     public bool HasTattooSelection => SelectedTattoo is not null;
@@ -1027,12 +1028,12 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
 
         foreach (var gender in GenderOption.All)
         {
-            var genderNode = new TreeNode(gender.Label);
+            var genderNode = new TreeNode(gender.Label, icon: gender.Value == PedGender.Male ? "Icon.Mars" : "Icon.Venus");
             foreach (var slot in SlotOption.All)
             {
                 var drawables = ClothingProject.InGameOrder(Project.DrawablesFor(gender.Value).Where(d => SlotOption.For(d) == slot));
                 if (drawables.Count == 0) continue;
-                var slotNode = new TreeNode($"{slot.Label} ({drawables.Count})");
+                var slotNode = new TreeNode(slot.Label, icon: slot.Icon, count: drawables.Count);
                 for (var i = 0; i < drawables.Count; i++)
                     slotNode.Children.Add(new TreeNode(drawables[i].Name, new DrawableViewModel(drawables[i], OnDrawableChanged) { Number = i }, number: $"{i:000}"));
                 genderNode.Children.Add(slotNode);
@@ -1042,12 +1043,12 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
 
         if (Project.Tattoos.Count > 0)
         {
-            var tattoosNode = new TreeNode($"Tatuajes ({Project.Tattoos.Count})");
+            var tattoosNode = new TreeNode("Tatuajes", icon: "Icon.Stamp", count: Project.Tattoos.Count);
             foreach (var zone in TattooZoneOption.All)
             {
                 var tattoos = Project.Tattoos.Where(t => t.Zone == zone.Value).OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList();
                 if (tattoos.Count == 0) continue;
-                var zoneNode = new TreeNode($"{zone.Label} ({tattoos.Count})");
+                var zoneNode = new TreeNode(zone.Label, count: tattoos.Count);
                 foreach (var t in tattoos)
                     zoneNode.Children.Add(new TreeNode(t.Name, tattoo: new TattooViewModel(t, OnTattooChanged)));
                 tattoosNode.Children.Add(zoneNode);
@@ -1081,6 +1082,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         {
             Issues.Clear();
             OnPropertyChanged(nameof(IssueSummary));
+            OnPropertyChanged(nameof(IsClean));
             return;
         }
 

@@ -28,6 +28,9 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
     private readonly OrbitCamera _camera = new();
     private GL? _gl;
     private uint _program;
+    private uint _backgroundProgram;
+    private uint _shadowProgram;
+    private uint _emptyVao;
     private readonly List<GpuLayer> _layers = [];
 
     private IReadOnlyList<(RenderItem Item, bool Context)>? _pendingScene;
@@ -35,6 +38,7 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
     private Point? _dragOrigin;
     private bool _panning;
     private (Vector3 Min, Vector3 Max) _bounds;
+    private (Vector3 Min, Vector3 Max) _sceneBounds;
 
     public Action<RgbaImage>? SnapshotRequested { get; set; }
 
@@ -54,6 +58,7 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
         _pendingScene = [.. items.Select(i => (i, false)), .. context.Select(i => (i, true))];
         var framed = items.Any(i => i.Meshes.Count > 0) ? items : context;
         var bounds = MeshBounds.Of(framed.SelectMany(i => i.Meshes));
+        _sceneBounds = MeshBounds.Of(items.Concat(context).SelectMany(i => i.Meshes));
         if (bounds != _bounds && (!keepCamera || _bounds == default))
         {
             _bounds = bounds;
@@ -102,6 +107,9 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
         _gl = GL.GetApi(gl.GetProcAddress);
         var isEs = GlVersion.Type == GlProfileType.OpenGLES;
         _program = CompileProgram(_gl, Shaders.Header(isEs) + Shaders.Vertex, Shaders.Header(isEs) + Shaders.Fragment);
+        _backgroundProgram = CompileProgram(_gl, Shaders.Header(isEs) + Shaders.BackgroundVertex, Shaders.Header(isEs) + Shaders.BackgroundFragment);
+        _shadowProgram = CompileProgram(_gl, Shaders.Header(isEs) + Shaders.ShadowVertex, Shaders.Header(isEs) + Shaders.ShadowFragment);
+        _emptyVao = _gl.GenVertexArray();
     }
 
     protected override void OnOpenGlDeinit(GlInterface gl)
@@ -109,6 +117,9 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
         if (_gl is null) return;
         ClearLayers(_gl);
         _gl.DeleteProgram(_program);
+        _gl.DeleteProgram(_backgroundProgram);
+        _gl.DeleteProgram(_shadowProgram);
+        _gl.DeleteVertexArray(_emptyVao);
         _gl = null;
     }
 
@@ -144,12 +155,19 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
         g.ClearColor(0.11f, 0.12f, 0.14f, 1f);
         g.ClearDepth(1f);
         g.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+        g.Disable(EnableCap.CullFace);
+        var viewProjection = _camera.ViewMatrix * _camera.ProjectionMatrix((float)width / height);
+
+        g.Disable(EnableCap.DepthTest);
+        g.BindVertexArray(_emptyVao);
+        g.UseProgram(_backgroundProgram);
+        g.Uniform1(g.GetUniformLocation(_backgroundProgram, "uAspect"), (float)width / height);
+        g.DrawArrays(PrimitiveType.Triangles, 0, 3);
+        DrawShadow(g, viewProjection);
+
         g.Enable(EnableCap.DepthTest);
         g.DepthFunc(DepthFunction.Lequal);
-        g.Disable(EnableCap.CullFace);
-
         g.UseProgram(_program);
-        var viewProjection = _camera.ViewMatrix * _camera.ProjectionMatrix((float)width / height);
         g.UniformMatrix4(g.GetUniformLocation(_program, "uViewProjection"), 1, false, (float*)&viewProjection);
         var light = Vector3.Normalize(_camera.Position - _camera.Target);
         g.Uniform3(g.GetUniformLocation(_program, "uLightDir"), light.X, light.Y, light.Z);
@@ -193,6 +211,24 @@ public sealed class MeshViewport : OpenGlControlBase, ICustomHitTest
                 Array.Copy(pixels, (height - 1 - y) * width * 4, flipped, y * width * 4, width * 4);
             Dispatcher.UIThread.Post(() => snapshot(new RgbaImage(width, height, flipped)));
         }
+    }
+
+    // Drawn before the meshes without depth, so anything standing on the floor covers it.
+    private unsafe void DrawShadow(GL g, Matrix4x4 viewProjection)
+    {
+        var (min, max) = _sceneBounds;
+        if (min == max || _camera.Position.Z <= min.Z) return;
+        var centre = new Vector3((min.X + max.X) / 2, (min.Y + max.Y) / 2, min.Z);
+        var radius = MathF.Max(max.X - min.X, max.Y - min.Y) * 0.75f;
+        g.Enable(EnableCap.Blend);
+        // Keep the framebuffer opaque: Avalonia composites it, and lower alpha would show through as a halo.
+        g.BlendFuncSeparate(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha, BlendingFactor.Zero, BlendingFactor.One);
+        g.UseProgram(_shadowProgram);
+        g.UniformMatrix4(g.GetUniformLocation(_shadowProgram, "uViewProjection"), 1, false, (float*)&viewProjection);
+        g.Uniform3(g.GetUniformLocation(_shadowProgram, "uCentre"), centre.X, centre.Y, centre.Z);
+        g.Uniform2(g.GetUniformLocation(_shadowProgram, "uRadius"), radius, radius * 0.8f);
+        g.DrawArrays(PrimitiveType.TriangleStrip, 0, 4);
+        g.Disable(EnableCap.Blend);
     }
 
     // The GL surface draws nothing Avalonia can hit-test, so claim the whole area for input.

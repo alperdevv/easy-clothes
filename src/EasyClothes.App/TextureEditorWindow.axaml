@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:viewer="using:EasyClothes.App.Viewer"
+        xmlns:ui="using:EasyClothes.App.Controls"
         xmlns:vm="using:EasyClothes.App.ViewModels"
         x:Class="EasyClothes.App.TextureEditorWindow"
         x:DataType="vm:TextureEditorViewModel" Icon="/Assets/icon.ico"
@@ -23,13 +24,19 @@
       <Setter Property="Padding" Value="8,4" />
       <Setter Property="MinHeight" Value="0" />
     </Style>
-    <Style Selector="ToggleButton.tool">
-      <Setter Property="MinWidth" Value="76" />
-    </Style>
     <Style Selector="WrapPanel.buttons > Button">
       <Setter Property="Margin" Value="0,0,4,4" />
-      <Setter Property="Padding" Value="8,3" />
+      <Setter Property="Padding" Value="8,4" />
       <Setter Property="FontSize" Value="12" />
+    </Style>
+    <!-- The visibility eye: no checked tint, the icon already says it. -->
+    <Style Selector="ToggleButton.eye:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.eye">
+      <Setter Property="Padding" Value="4" />
+      <Setter Property="Foreground" Value="{StaticResource SubtleBrush}" />
     </Style>
   </Window.Styles>
 
@@ -37,21 +44,47 @@
     <Border DockPanel.Dock="Top" Classes="bar" BorderThickness="0,0,0,1">
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
-          <Button Content="Cancelar" Click="OnCancel" />
-          <Button Content="Aplicar…" Command="{Binding ApplyCommand}" Classes="accent" />
+          <Button Classes="flat" Click="OnCancel">
+            <ui:IconLabel Icon="{StaticResource Icon.X}" Text="Cancelar" />
+          </Button>
+          <Button Command="{Binding ApplyCommand}" Classes="accent">
+            <ui:IconLabel Icon="{StaticResource Icon.Check}" Text="Aplicar…" />
+          </Button>
         </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <ToggleButton Classes="tool" Content="Mover" IsChecked="{Binding IsMoveTool}" ToolTip.Tip="Mover la capa o la imagen seleccionada (V)" />
-          <ToggleButton Classes="tool" Content="Pincel" IsChecked="{Binding IsBrushTool}" ToolTip.Tip="Pintar en la capa seleccionada (B). Alt+clic toma un color" />
-          <ToggleButton Classes="tool" Content="Borrador" IsChecked="{Binding IsEraserTool}" ToolTip.Tip="Borrar en la capa seleccionada (E)" />
-          <ToggleButton Classes="tool" Content="Mano" IsChecked="{Binding IsHandTool}" ToolTip.Tip="Desplazar la vista (H, o mantén Espacio)" />
+        <StackPanel Orientation="Horizontal">
+          <Border Background="{StaticResource WindowBrush}" CornerRadius="8" Padding="3">
+            <StackPanel Classes="group">
+              <ToggleButton Classes="flat" IsChecked="{Binding IsMoveTool}" ToolTip.Tip="Mover la capa o la imagen seleccionada (V)">
+                <ui:IconLabel Icon="{StaticResource Icon.Move}" Text="Mover" />
+              </ToggleButton>
+              <ToggleButton Classes="flat" IsChecked="{Binding IsBrushTool}" ToolTip.Tip="Pintar en la capa seleccionada (B). Alt+clic toma un color">
+                <ui:IconLabel Icon="{StaticResource Icon.Paintbrush}" Text="Pincel" />
+              </ToggleButton>
+              <ToggleButton Classes="flat" IsChecked="{Binding IsEraserTool}" ToolTip.Tip="Borrar en la capa seleccionada (E)">
+                <ui:IconLabel Icon="{StaticResource Icon.Eraser}" Text="Borrador" />
+              </ToggleButton>
+              <ToggleButton Classes="flat" IsChecked="{Binding IsHandTool}" ToolTip.Tip="Desplazar la vista (H, o mantén Espacio)">
+                <ui:IconLabel Icon="{StaticResource Icon.Hand}" Text="Mano" />
+              </ToggleButton>
+            </StackPanel>
+          </Border>
           <Rectangle Classes="separator" />
-          <Button Content="Deshacer" Command="{Binding UndoCommand}" ToolTip.Tip="Ctrl+Z" />
-          <Button Content="Rehacer" Command="{Binding RedoCommand}" ToolTip.Tip="Ctrl+Y" />
-          <Button Content="Restablecer" Command="{Binding ResetAllCommand}" ToolTip.Tip="Vuelve a como estaba la textura al abrir el editor" />
+          <StackPanel Classes="group">
+            <Button Classes="flat square" Command="{Binding UndoCommand}" ToolTip.Tip="Deshacer (Ctrl+Z)">
+              <ui:Icon Data="{StaticResource Icon.Undo2}" />
+            </Button>
+            <Button Classes="flat square" Command="{Binding RedoCommand}" ToolTip.Tip="Rehacer (Ctrl+Y)">
+              <ui:Icon Data="{StaticResource Icon.Redo2}" />
+            </Button>
+            <Button Classes="flat" Command="{Binding ResetAllCommand}" ToolTip.Tip="Vuelve a como estaba la textura al abrir el editor">
+              <ui:IconLabel Icon="{StaticResource Icon.RotateCcw}" Text="Restablecer" />
+            </Button>
+          </StackPanel>
           <Rectangle Classes="separator" />
-          <Button Content="Editar en Photoshop/GIMP" Command="{Binding OpenExternalCommand}"
-                  ToolTip.Tip="Abre la textura como PNG en tu editor de imágenes; al guardar allí vuelve aquí como una capa nueva" />
+          <Button Classes="flat" Command="{Binding OpenExternalCommand}"
+                  ToolTip.Tip="Abre la textura como PNG en tu editor de imágenes; al guardar allí vuelve aquí como una capa nueva">
+            <ui:IconLabel Icon="{StaticResource Icon.ExternalLink}" Text="Editar en Photoshop/GIMP" />
+          </Button>
         </StackPanel>
       </DockPanel>
     </Border>
@@ -68,128 +101,175 @@
           <Slider Minimum="1" Maximum="100" Value="{Binding BrushOpacity}" Width="110" />
           <TextBlock Classes="muted" Text="[ y ] cambian el tamaño · Alt+clic: cuentagotas" />
         </StackPanel>
-        <TextBlock Classes="muted" IsVisible="{Binding IsMoveTool}" Margin="0,7"
-                   Text="Arrastra para mover la capa seleccionada; clic sobre una imagen la selecciona. Ctrl+rueda cambia su tamaño." />
-        <TextBlock Classes="muted" IsVisible="{Binding IsHandTool}" Margin="0,7"
-                   Text="Arrastra para desplazar la vista. La rueda hace zoom; Ctrl+0 ajusta y Ctrl+1 muestra a tamaño real." />
+        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsMoveTool}" Margin="0,7">
+          <ui:Icon Classes="muted" Size="14" Data="{StaticResource Icon.Info}" />
+          <TextBlock Classes="muted" Text="Arrastra para mover la capa seleccionada; clic sobre una imagen la selecciona. Ctrl+rueda cambia su tamaño." />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsHandTool}" Margin="0,7">
+          <ui:Icon Classes="muted" Size="14" Data="{StaticResource Icon.Info}" />
+          <TextBlock Classes="muted" Text="Arrastra para desplazar la vista. La rueda hace zoom; Ctrl+0 ajusta y Ctrl+1 muestra a tamaño real." />
+        </StackPanel>
       </Panel>
     </Border>
 
-    <Border DockPanel.Dock="Bottom" Classes="bar" BorderThickness="0,1,0,0">
+    <Border DockPanel.Dock="Bottom" Classes="bar" BorderThickness="0,1,0,0" Padding="12,4">
       <DockPanel>
-        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4">
-          <Button Classes="small" Content="−" Click="OnZoomOut" ToolTip.Tip="Alejar (Ctrl+-)" />
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2">
+          <Button Classes="flat square" Click="OnZoomOut" ToolTip.Tip="Alejar (Ctrl+-)">
+            <ui:Icon Size="14" Data="{StaticResource Icon.ZoomOut}" />
+          </Button>
           <TextBlock Classes="muted" Text="{Binding ZoomPercent, StringFormat='{}{0:0} %'}" MinWidth="46" TextAlignment="Center" />
-          <Button Classes="small" Content="+" Click="OnZoomIn" ToolTip.Tip="Acercar (Ctrl++)" />
-          <Button Classes="small" Content="Ajustar" Click="OnFit" ToolTip.Tip="Ctrl+0" />
-          <Button Classes="small" Content="100 %" Click="OnActualPixels" ToolTip.Tip="Ctrl+1" />
-          <TextBlock Classes="muted" Text="{Binding SizeLabel}" Margin="8,0,0,0" />
+          <Button Classes="flat square" Click="OnZoomIn" ToolTip.Tip="Acercar (Ctrl++)">
+            <ui:Icon Size="14" Data="{StaticResource Icon.ZoomIn}" />
+          </Button>
+          <Button Classes="flat square" Click="OnFit" ToolTip.Tip="Ajustar a la ventana (Ctrl+0)">
+            <ui:Icon Size="14" Data="{StaticResource Icon.Maximize}" />
+          </Button>
+          <Button Classes="flat small" Content="100 %" Click="OnActualPixels" ToolTip.Tip="Tamaño real (Ctrl+1)" />
+          <Border Background="{StaticResource HoverBrush}" CornerRadius="9" Padding="8,1" Margin="8,0,0,0" VerticalAlignment="Center">
+            <TextBlock Classes="muted" FontSize="11" Text="{Binding SizeLabel}" />
+          </Border>
         </StackPanel>
         <TextBlock Classes="muted" Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
       </DockPanel>
     </Border>
 
-    <Grid ColumnDefinitions="*,4,0.7*,4,320">
+    <Grid ColumnDefinitions="*,1,0.7*,1,320">
       <viewer:TextureCanvas x:Name="Canvas" ClipToBounds="True" Focusable="True" />
 
       <GridSplitter Grid.Column="1" />
 
-      <DockPanel Grid.Column="2">
-        <TextBlock DockPanel.Dock="Top" Classes="header" Text="VISTA PREVIA" />
+      <Panel Grid.Column="2">
         <viewer:MeshViewport x:Name="Viewport" />
-      </DockPanel>
+        <Border Classes="overlay" HorizontalAlignment="Left" VerticalAlignment="Top">
+          <ui:IconLabel Classes="section" Margin="0" Icon="{StaticResource Icon.Eye}" Text="VISTA PREVIA" />
+        </Border>
+      </Panel>
 
       <GridSplitter Grid.Column="3" />
 
-      <Grid Grid.Column="4" RowDefinitions="Auto,*,Auto,Auto,1.3*,Auto,130">
-        <TextBlock Classes="header" Text="CAPAS" />
-        <ListBox Grid.Row="1" x:Name="LayerList" Classes="compact" ItemsSource="{Binding Layers}" SelectedItem="{Binding SelectedLayer}" Margin="12,0">
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:LayerViewModel">
-              <Grid ColumnDefinitions="Auto,*,Auto">
-                <CheckBox IsChecked="{Binding Visible}" MinWidth="0" Padding="0" Margin="0,0,6,0" ToolTip.Tip="Mostrar u ocultar" />
-                <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                  <TextBlock Classes="muted" Text="🔒" IsVisible="{Binding Locked}" />
-                  <TextBlock Classes="muted" Text="{Binding Kind}" />
-                </StackPanel>
-              </Grid>
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
+      <Border Grid.Column="4" Classes="panel">
+        <Grid RowDefinitions="Auto,*,Auto,Auto,1.3*,Auto,130">
+          <ui:IconLabel Classes="section" Margin="14,12,12,6" Icon="{StaticResource Icon.Layers}" Text="CAPAS" />
+          <ListBox Grid.Row="1" x:Name="LayerList" Classes="compact" ItemsSource="{Binding Layers}" SelectedItem="{Binding SelectedLayer}" Margin="8,0">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:LayerViewModel">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <ToggleButton Classes="flat eye" IsChecked="{Binding Visible}" Margin="0,0,6,0" ToolTip.Tip="Mostrar u ocultar">
+                    <Panel>
+                      <ui:Icon Size="15" Data="{StaticResource Icon.Eye}" IsVisible="{Binding Visible}" />
+                      <ui:Icon Size="15" Data="{StaticResource Icon.EyeOff}" IsVisible="{Binding !Visible}" />
+                    </Panel>
+                  </ToggleButton>
+                  <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <ui:Icon Classes="muted" Size="13" Data="{StaticResource Icon.Lock}" IsVisible="{Binding Locked}" />
+                    <TextBlock Classes="muted" FontSize="11" Text="{Binding Kind}" />
+                  </StackPanel>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
 
-        <WrapPanel Grid.Row="2" Classes="buttons" Margin="12,6,8,0">
-          <Button Content="Nueva capa" Command="{Binding NewLayerCommand}" ToolTip.Tip="Capa vacía para pintar (Ctrl+Mayús+N)" />
-          <Button Content="Relleno" Command="{Binding NewFillLayerCommand}" ToolTip.Tip="Capa de un color sólido" />
-          <Button Content="Ajuste" Command="{Binding NewAdjustmentLayerCommand}" ToolTip.Tip="Tono, saturación, brillo... de lo que hay debajo" />
-          <Button Content="Imagen…" Command="{Binding AddImageCommand}" ToolTip.Tip="Logo, parche o cualquier PNG/YTD" />
-          <Button Content="Duplicar" Command="{Binding DuplicateLayerCommand}" ToolTip.Tip="Ctrl+J" />
-          <Button Content="Combinar abajo" Command="{Binding MergeDownCommand}" ToolTip.Tip="Ctrl+E" />
-          <Button Content="Rasterizar" Command="{Binding RasterizeLayerCommand}" ToolTip.Tip="Convierte la capa en píxeles para poder pintar en ella" />
-          <Button Content="▲" Command="{Binding MoveLayerUpCommand}" ToolTip.Tip="Subir" />
-          <Button Content="▼" Command="{Binding MoveLayerDownCommand}" ToolTip.Tip="Bajar" />
-          <Button Content="Eliminar" Command="{Binding DeleteLayerCommand}" ToolTip.Tip="Supr" />
-        </WrapPanel>
-
-        <TextBlock Grid.Row="3" Classes="header" Text="PROPIEDADES" />
-        <ScrollViewer Grid.Row="4">
-          <StackPanel>
-            <StackPanel Classes="form" DataContext="{Binding SelectedLayer}" x:DataType="vm:LayerViewModel"
-                        IsVisible="{Binding $parent[Window].((vm:TextureEditorViewModel)DataContext).HasSelectedLayer}">
-              <TextBlock Classes="label" Text="Nombre" />
-              <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" />
-              <TextBlock Classes="label" Text="Modo de fusión" />
-              <ComboBox ItemsSource="{x:Static vm:LayerViewModel.BlendNames}" SelectedIndex="{Binding BlendIndex}" HorizontalAlignment="Stretch" />
-              <TextBlock Classes="label" Text="{Binding Opacity, StringFormat='Opacidad: {0:0} %'}" />
-              <Slider Minimum="0" Maximum="100" Value="{Binding Opacity}" />
-              <CheckBox Content="Bloquear capa" IsChecked="{Binding Locked}" />
-
-              <StackPanel IsVisible="{Binding IsImage}">
-                <TextBlock Classes="label" Text="{Binding Size, StringFormat='Tamaño: {0:0} % del ancho'}" />
-                <Slider Minimum="1" Maximum="400" Value="{Binding Size}" />
-                <TextBlock Classes="label" Text="{Binding Rotation, StringFormat='Rotación: {0:0}°'}" />
-                <Slider Minimum="-180" Maximum="180" Value="{Binding Rotation}" />
+          <StackPanel Grid.Row="2" Margin="12,8,12,0" Spacing="4">
+            <WrapPanel Classes="buttons">
+              <Button Command="{Binding NewLayerCommand}" ToolTip.Tip="Capa vacía para pintar (Ctrl+Mayús+N)">
+                <ui:IconLabel Icon="{StaticResource Icon.Plus}" IconSize="14" Spacing="5" Text="Capa" />
+              </Button>
+              <Button Command="{Binding NewFillLayerCommand}" ToolTip.Tip="Capa de un color sólido">
+                <ui:IconLabel Icon="{StaticResource Icon.PaintBucket}" IconSize="14" Spacing="5" Text="Relleno" />
+              </Button>
+              <Button Command="{Binding NewAdjustmentLayerCommand}" ToolTip.Tip="Tono, saturación, brillo... de lo que hay debajo">
+                <ui:IconLabel Icon="{StaticResource Icon.SlidersHorizontal}" IconSize="14" Spacing="5" Text="Ajuste" />
+              </Button>
+              <Button Command="{Binding AddImageCommand}" ToolTip.Tip="Logo, parche o cualquier PNG/YTD">
+                <ui:IconLabel Icon="{StaticResource Icon.Image}" IconSize="14" Spacing="5" Text="Imagen…" />
+              </Button>
+            </WrapPanel>
+            <Border Background="{StaticResource WindowBrush}" CornerRadius="8" Padding="3" HorizontalAlignment="Left">
+              <StackPanel Classes="group">
+                <Button Classes="flat square" Command="{Binding DuplicateLayerCommand}" ToolTip.Tip="Duplicar (Ctrl+J)">
+                  <ui:Icon Size="15" Data="{StaticResource Icon.Copy}" />
+                </Button>
+                <Button Classes="flat square" Command="{Binding MergeDownCommand}" ToolTip.Tip="Combinar con la de abajo (Ctrl+E)">
+                  <ui:Icon Size="15" Data="{StaticResource Icon.Merge}" />
+                </Button>
+                <Button Classes="flat square" Command="{Binding RasterizeLayerCommand}" ToolTip.Tip="Rasterizar: convierte la capa en píxeles para poder pintar en ella">
+                  <ui:Icon Size="15" Data="{StaticResource Icon.Grid3x3}" />
+                </Button>
+                <Button Classes="flat square" Command="{Binding MoveLayerUpCommand}" ToolTip.Tip="Subir">
+                  <ui:Icon Size="15" Data="{StaticResource Icon.ChevronUp}" />
+                </Button>
+                <Button Classes="flat square" Command="{Binding MoveLayerDownCommand}" ToolTip.Tip="Bajar">
+                  <ui:Icon Size="15" Data="{StaticResource Icon.ChevronDown}" />
+                </Button>
+                <Button Classes="flat square danger" Command="{Binding DeleteLayerCommand}" ToolTip.Tip="Eliminar (Supr)">
+                  <ui:Icon Size="15" Data="{StaticResource Icon.Trash2}" />
+                </Button>
               </StackPanel>
-
-              <DockPanel IsVisible="{Binding IsFill}" Margin="0,8,0,0">
-                <ColorPicker DockPanel.Dock="Right" Color="{Binding FillColor}" IsAlphaVisible="False" />
-                <TextBlock Classes="label" Text="Color" VerticalAlignment="Center" Margin="0" />
-              </DockPanel>
-
-              <StackPanel IsVisible="{Binding IsAdjustment}">
-                <TextBlock Classes="label" Text="{Binding Hue, StringFormat='Tono: {0:0}°'}" />
-                <Slider Minimum="-180" Maximum="180" Value="{Binding Hue}" />
-                <TextBlock Classes="label" Text="{Binding Saturation, StringFormat='Saturación: {0:0}'}" />
-                <Slider Minimum="-100" Maximum="100" Value="{Binding Saturation}" />
-                <TextBlock Classes="label" Text="{Binding Brightness, StringFormat='Brillo: {0:0}'}" />
-                <Slider Minimum="-100" Maximum="100" Value="{Binding Brightness}" />
-                <TextBlock Classes="label" Text="{Binding Contrast, StringFormat='Contraste: {0:0}'}" />
-                <Slider Minimum="-100" Maximum="100" Value="{Binding Contrast}" />
-                <TextBlock Classes="label" Text="{Binding TintStrength, StringFormat='Tinte: {0:0} %'}" />
-                <DockPanel>
-                  <ColorPicker DockPanel.Dock="Right" Color="{Binding TintColor}" Margin="8,0,0,0" IsAlphaVisible="False" />
-                  <Slider Minimum="0" Maximum="100" Value="{Binding TintStrength}" />
-                </DockPanel>
-              </StackPanel>
-            </StackPanel>
-
-            <StackPanel Classes="form" IsVisible="{Binding HasOriginal}">
-              <CheckBox IsChecked="{Binding KeepOriginalAlpha}">
-                <TextBlock TextWrapping="Wrap" Text="Mantener la transparencia (recorte) de la textura original" />
-              </CheckBox>
-            </StackPanel>
+            </Border>
           </StackPanel>
-        </ScrollViewer>
 
-        <TextBlock Grid.Row="5" Classes="header" Text="HISTORIAL" />
-        <ListBox Grid.Row="6" Classes="compact" ItemsSource="{Binding HistoryItems}" SelectedIndex="{Binding HistoryIndex}" Margin="12,0,12,12">
-          <ListBox.ItemTemplate>
-            <DataTemplate x:DataType="vm:HistoryItemViewModel">
-              <TextBlock Text="{Binding Label}" Classes.undone="{Binding IsUndone}" FontSize="12" />
-            </DataTemplate>
-          </ListBox.ItemTemplate>
-        </ListBox>
-      </Grid>
+          <ui:IconLabel Grid.Row="3" Classes="section" Margin="14,14,12,2" Icon="{StaticResource Icon.SlidersHorizontal}" Text="PROPIEDADES" />
+          <ScrollViewer Grid.Row="4">
+            <StackPanel>
+              <StackPanel Classes="form" DataContext="{Binding SelectedLayer}" x:DataType="vm:LayerViewModel"
+                          IsVisible="{Binding $parent[Window].((vm:TextureEditorViewModel)DataContext).HasSelectedLayer}">
+                <TextBlock Classes="label" Text="Nombre" />
+                <TextBox Text="{Binding Name, UpdateSourceTrigger=LostFocus}" />
+                <TextBlock Classes="label" Text="Modo de fusión" />
+                <ComboBox ItemsSource="{x:Static vm:LayerViewModel.BlendNames}" SelectedIndex="{Binding BlendIndex}" HorizontalAlignment="Stretch" />
+                <TextBlock Classes="label" Text="{Binding Opacity, StringFormat='Opacidad: {0:0} %'}" />
+                <Slider Minimum="0" Maximum="100" Value="{Binding Opacity}" />
+                <CheckBox Content="Bloquear capa" IsChecked="{Binding Locked}" />
+
+                <StackPanel IsVisible="{Binding IsImage}">
+                  <TextBlock Classes="label" Text="{Binding Size, StringFormat='Tamaño: {0:0} % del ancho'}" />
+                  <Slider Minimum="1" Maximum="400" Value="{Binding Size}" />
+                  <TextBlock Classes="label" Text="{Binding Rotation, StringFormat='Rotación: {0:0}°'}" />
+                  <Slider Minimum="-180" Maximum="180" Value="{Binding Rotation}" />
+                </StackPanel>
+
+                <DockPanel IsVisible="{Binding IsFill}" Margin="0,8,0,0">
+                  <ColorPicker DockPanel.Dock="Right" Color="{Binding FillColor}" IsAlphaVisible="False" />
+                  <TextBlock Classes="label" Text="Color" VerticalAlignment="Center" Margin="0" />
+                </DockPanel>
+
+                <StackPanel IsVisible="{Binding IsAdjustment}">
+                  <TextBlock Classes="label" Text="{Binding Hue, StringFormat='Tono: {0:0}°'}" />
+                  <Slider Minimum="-180" Maximum="180" Value="{Binding Hue}" />
+                  <TextBlock Classes="label" Text="{Binding Saturation, StringFormat='Saturación: {0:0}'}" />
+                  <Slider Minimum="-100" Maximum="100" Value="{Binding Saturation}" />
+                  <TextBlock Classes="label" Text="{Binding Brightness, StringFormat='Brillo: {0:0}'}" />
+                  <Slider Minimum="-100" Maximum="100" Value="{Binding Brightness}" />
+                  <TextBlock Classes="label" Text="{Binding Contrast, StringFormat='Contraste: {0:0}'}" />
+                  <Slider Minimum="-100" Maximum="100" Value="{Binding Contrast}" />
+                  <TextBlock Classes="label" Text="{Binding TintStrength, StringFormat='Tinte: {0:0} %'}" />
+                  <DockPanel>
+                    <ColorPicker DockPanel.Dock="Right" Color="{Binding TintColor}" Margin="8,0,0,0" IsAlphaVisible="False" />
+                    <Slider Minimum="0" Maximum="100" Value="{Binding TintStrength}" />
+                  </DockPanel>
+                </StackPanel>
+              </StackPanel>
+
+              <StackPanel Classes="form" IsVisible="{Binding HasOriginal}">
+                <CheckBox IsChecked="{Binding KeepOriginalAlpha}">
+                  <TextBlock TextWrapping="Wrap" Text="Mantener la transparencia (recorte) de la textura original" />
+                </CheckBox>
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+
+          <ui:IconLabel Grid.Row="5" Classes="section" Margin="14,12,12,4" Icon="{StaticResource Icon.History}" Text="HISTORIAL" />
+          <ListBox Grid.Row="6" Classes="compact" ItemsSource="{Binding HistoryItems}" SelectedIndex="{Binding HistoryIndex}" Margin="8,0,8,10">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:HistoryItemViewModel">
+                <TextBlock Text="{Binding Label}" Classes.undone="{Binding IsUndone}" FontSize="12" />
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Grid>
+      </Border>
     </Grid>
   </DockPanel>
 </Window>

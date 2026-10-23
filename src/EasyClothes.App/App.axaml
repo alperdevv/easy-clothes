@@ -1,21 +1,100 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:EasyClothes.App.Controls"
              x:Class="EasyClothes.App.App"
              RequestedThemeVariant="Dark">
   <Application.Resources>
-    <SolidColorBrush x:Key="WindowBrush" Color="#1B1D22" />
-    <SolidColorBrush x:Key="BarBrush" Color="#24272E" />
-    <SolidColorBrush x:Key="LineBrush" Color="#33373F" />
-    <SolidColorBrush x:Key="MutedBrush" Color="#A0A6B0" />
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://EasyClothes.App/Icons.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+
+      <Color x:Key="AccentColor">#FF8A1F</Color>
+      <SolidColorBrush x:Key="WindowBrush" Color="#141518" />
+      <SolidColorBrush x:Key="PanelBrush" Color="#1A1B1F" />
+      <SolidColorBrush x:Key="BarBrush" Color="#202126" />
+      <SolidColorBrush x:Key="CardBrush" Color="#212227" />
+      <SolidColorBrush x:Key="HoverBrush" Color="#2C2E34" />
+      <SolidColorBrush x:Key="PressedBrush" Color="#36383F" />
+      <SolidColorBrush x:Key="LineBrush" Color="#2E3036" />
+      <SolidColorBrush x:Key="SeamBrush" Color="#0F1012" />
+      <SolidColorBrush x:Key="TextBrush" Color="#E8E9EC" />
+      <SolidColorBrush x:Key="MutedBrush" Color="#9A9EA8" />
+      <SolidColorBrush x:Key="SubtleBrush" Color="#6B6F78" />
+      <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+      <SolidColorBrush x:Key="AccentSoftBrush" Color="#33FF8A1F" />
+      <SolidColorBrush x:Key="ErrorBrush" Color="#F0616D" />
+      <SolidColorBrush x:Key="WarningBrush" Color="#E5B454" />
+      <SolidColorBrush x:Key="InfoBrush" Color="#7FA7D9" />
+      <SolidColorBrush x:Key="SuccessBrush" Color="#5CC48A" />
+
+      <!-- Dark text on the orange accent reads better than Fluent's white. -->
+      <SolidColorBrush x:Key="OnAccentBrush" Color="#1C1208" />
+      <StaticResource x:Key="AccentButtonForeground" ResourceKey="OnAccentBrush" />
+      <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="OnAccentBrush" />
+      <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="OnAccentBrush" />
+      <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="OnAccentBrush" />
+      <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="OnAccentBrush" />
+      <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="OnAccentBrush" />
+
+      <!-- Selected rows get a tint instead of a solid accent block. -->
+      <SolidColorBrush x:Key="SystemControlHighlightListAccentLowBrush" Color="#33FF8A1F" />
+      <SolidColorBrush x:Key="SystemControlHighlightListAccentMediumBrush" Color="#40FF8A1F" />
+      <SolidColorBrush x:Key="SystemControlHighlightListAccentHighBrush" Color="#4DFF8A1F" />
+      <StaticResource x:Key="TreeViewItemBackgroundSelected" ResourceKey="SystemControlHighlightListAccentLowBrush" />
+      <StaticResource x:Key="TreeViewItemBackgroundSelectedPointerOver" ResourceKey="SystemControlHighlightListAccentMediumBrush" />
+      <StaticResource x:Key="TreeViewItemBackgroundSelectedPressed" ResourceKey="SystemControlHighlightListAccentHighBrush" />
+      <StaticResource x:Key="TreeViewItemBackgroundPointerOver" ResourceKey="HoverBrush" />
+      <StaticResource x:Key="TreeViewItemForegroundSelected" ResourceKey="TextBrush" />
+      <StaticResource x:Key="TreeViewItemForegroundSelectedPointerOver" ResourceKey="TextBrush" />
+      <StaticResource x:Key="TreeViewItemForegroundSelectedPressed" ResourceKey="TextBrush" />
+    </ResourceDictionary>
   </Application.Resources>
+
   <Application.Styles>
-    <FluentTheme />
+    <FluentTheme>
+      <FluentTheme.Palettes>
+        <ColorPaletteResources x:Key="Dark" Accent="#FFFF8A1F" RegionColor="#FF141518" />
+      </FluentTheme.Palettes>
+    </FluentTheme>
     <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
+
     <Style Selector="Border.bar">
       <Setter Property="Background" Value="{StaticResource BarBrush}" />
-      <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource SeamBrush}" />
       <Setter Property="Padding" Value="8,6" />
     </Style>
+    <Style Selector="Border.panel">
+      <Setter Property="Background" Value="{StaticResource PanelBrush}" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{StaticResource CardBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource LineBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12,4,12,12" />
+      <Setter Property="Margin" Value="10,0,10,10" />
+    </Style>
+    <!-- Floating label over the 3D view. -->
+    <Style Selector="Border.overlay">
+      <Setter Property="Background" Value="#B3141518" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="9,5" />
+      <Setter Property="Margin" Value="10" />
+    </Style>
+    <Style Selector="Border.chip">
+      <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="5,1" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.chip > TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontFamily" Value="Consolas,Menlo,monospace" />
+    </Style>
+
     <Style Selector="TextBlock.muted">
       <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
       <Setter Property="FontSize" Value="12" />
@@ -25,42 +104,125 @@
       <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.6" />
       <Setter Property="Margin" Value="12,12,12,6" />
     </Style>
     <Style Selector="TextBlock.header-inline">
       <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
       <Setter Property="FontSize" Value="11" />
       <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.6" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="TextBlock.label">
       <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
       <Setter Property="FontSize" Value="12" />
-      <Setter Property="Margin" Value="0,6,0,2" />
+      <Setter Property="Margin" Value="0,8,0,3" />
     </Style>
     <Style Selector="TextBlock.error">
-      <Setter Property="Foreground" Value="#F0616D" />
+      <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
     </Style>
     <Style Selector="TextBlock.warning">
-      <Setter Property="Foreground" Value="#E5B454" />
+      <Setter Property="Foreground" Value="{StaticResource WarningBrush}" />
     </Style>
     <Style Selector="TextBlock.info">
-      <Setter Property="Foreground" Value="#7FA7D9" />
+      <Setter Property="Foreground" Value="{StaticResource InfoBrush}" />
+    </Style>
+
+    <!-- Section title: accent icon and small caps text. -->
+    <Style Selector="ui|IconLabel.section">
+      <Setter Property="Margin" Value="0,10,0,4" />
+      <Setter Property="Spacing" Value="8" />
+      <Setter Property="IconSize" Value="14" />
+    </Style>
+    <Style Selector="ui|IconLabel.section > ui|Icon">
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    </Style>
+    <Style Selector="ui|IconLabel.section > TextBlock">
+      <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="0.6" />
+    </Style>
+    <Style Selector="ui|Icon.error">
+      <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
+    </Style>
+    <Style Selector="ui|Icon.warning">
+      <Setter Property="Foreground" Value="{StaticResource WarningBrush}" />
+    </Style>
+    <Style Selector="ui|Icon.info">
+      <Setter Property="Foreground" Value="{StaticResource InfoBrush}" />
+    </Style>
+    <Style Selector="ui|Icon.success">
+      <Setter Property="Foreground" Value="{StaticResource SuccessBrush}" />
+    </Style>
+    <Style Selector="ui|Icon.muted">
+      <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+    </Style>
+
+    <Style Selector="Button, ToggleButton">
+      <Setter Property="CornerRadius" Value="6" />
     </Style>
     <Style Selector="Button.small">
-      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="Padding" Value="8,3" />
       <Setter Property="FontSize" Value="12" />
     </Style>
+
+    <!-- Toolbar buttons: no chrome until hovered. -->
+    <Style Selector="Button.flat, ToggleButton.flat">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="9,6" />
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    </Style>
+    <Style Selector="Button.flat:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.flat:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource HoverBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+    </Style>
+    <Style Selector="Button.flat:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.flat:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource PressedBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.flat:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    </Style>
+    <Style Selector="Button.flat:disabled /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.flat:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{StaticResource SubtleBrush}" />
+    </Style>
+    <Style Selector="Button.flat.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Foreground" Value="{StaticResource ErrorBrush}" />
+    </Style>
+    <Style Selector="Button.square, ToggleButton.square">
+      <Setter Property="Padding" Value="6" />
+    </Style>
+
+    <Style Selector="StackPanel.group">
+      <Setter Property="Orientation" Value="Horizontal" />
+      <Setter Property="Spacing" Value="2" />
+    </Style>
+
     <Style Selector="StackPanel.form">
       <Setter Property="Margin" Value="12,0,12,8" />
     </Style>
     <Style Selector="Rectangle.separator">
       <Setter Property="Width" Value="1" />
-      <Setter Property="Margin" Value="4,4" />
+      <Setter Property="Margin" Value="8,6" />
       <Setter Property="Fill" Value="{StaticResource LineBrush}" />
     </Style>
     <Style Selector="GridSplitter">
-      <Setter Property="Background" Value="{StaticResource LineBrush}" />
+      <Setter Property="Background" Value="{StaticResource SeamBrush}" />
+    </Style>
+
+    <Style Selector="TreeViewItem">
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="ListBoxItem">
+      <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="ListBox">
+      <Setter Property="Background" Value="Transparent" />
     </Style>
   </Application.Styles>
 </Application>
