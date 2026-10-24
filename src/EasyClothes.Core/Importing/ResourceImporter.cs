@@ -1,9 +1,15 @@
+using System.Xml;
+using System.Xml.Linq;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Rage;
 
 namespace EasyClothes.Core.Importing;
 
-public sealed record ResourceImportResult(IReadOnlyList<Drawable> Added, IReadOnlyList<string> Warnings, string? Collection);
+public sealed record ResourceImportResult(IReadOnlyList<Drawable> Added, IReadOnlyList<string> Warnings, string? Collection)
+{
+    // Loose models skipped because their name does not say which slot they belong to.
+    public IReadOnlyList<string> UnrecognizedNames { get; init; } = [];
+}
 
 // Brings in a finished resource: each .ymt says which garments exist and with which options,
 // so every garment keeps its in-game number, and numbers without files become reserved.
@@ -23,6 +29,7 @@ public static class ResourceImporter
         var added = new List<Drawable>();
         var warnings = new List<string>();
         string? collection = null;
+        IReadOnlyList<string> unrecognized = [];
         var resources = paths.Where(IsResource).ToList();
         foreach (var resource in resources)
         {
@@ -36,16 +43,16 @@ public static class ResourceImporter
             var result = DrawableImporter.Import(project, projectDir, loose, fallbackGender);
             added.AddRange(result.Added);
             warnings.AddRange(result.Warnings);
+            unrecognized = result.UnrecognizedNames;
         }
-        return new ResourceImportResult(added, warnings, collection);
+        return new ResourceImportResult(added, warnings, collection) { UnrecognizedNames = unrecognized };
     }
 
     public static ResourceImportResult Import(ClothingProject project, string projectDir, string resourceDir)
     {
         var warnings = new List<string>();
         var added = new List<Drawable>();
-        var ownAssets = Path.GetFullPath(projectDir) + Path.DirectorySeparatorChar;
-        var files = Directory.EnumerateFiles(resourceDir, "*", Recursive).Where(f => !Path.GetFullPath(f).StartsWith(ownAssets, StringComparison.OrdinalIgnoreCase)).ToList();
+        var files = Directory.EnumerateFiles(resourceDir, "*", Recursive).Where(f => !DrawableImporter.IsProjectFile(projectDir, f)).ToList();
 
         var models = new List<(Asset Asset, ModelName Name)>();
         var textures = new List<(Asset Asset, int Variation)>();
@@ -57,7 +64,12 @@ public static class ResourceImporter
                 textures.Add((new Asset(file, texture.Gender ?? StreamName.GenderFromFolders(file), StreamName.CollectionOf(file), texture.Slot, texture.Index), texture.Variation));
         }
 
+        var metas = files.Where(f => f.EndsWith(".meta", StringComparison.OrdinalIgnoreCase)).ToList();
+        var firstPerson = FirstPersonAssets(metas);
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var package = DrawableImporter.PackageName(resourceDir);
+        var ignored = 0;
+        var hadGarments = project.Drawables.Count > 0;
         var variations = FindVariations(resourceDir).ToList();
         foreach (var variation in variations)
         {
@@ -85,11 +97,16 @@ public static class ResourceImporter
                         added.Add(DrawableOrder.Reserve(project, variation.Gender, slot.Component, slot.Prop));
                         continue;
                     }
-                    var maps = textures.Where(t => Matches(t.Asset)).OrderBy(t => t.Variation).Select(t => t.Asset.Path).ToList();
-                    if (maps.Count != items[i].Textures)
-                        warnings.Add($"{Path.GetFileName(model.Asset.Path)}: el .ymt declara {items[i].Textures} texturas y hay {maps.Count}.");
-                    var drawable = DrawableImporter.Create(project, projectDir, model.Asset.Path, model.Name, variation.Gender, maps, warnings);
+                    // The .ymt decides how many textures the game uses; extra files are usually left over from an older build.
+                    var found = textures.Where(t => Matches(t.Asset)).OrderBy(t => t.Variation).ToList();
+                    var maps = found.Where(t => t.Variation < items[i].Textures).Select(t => t.Asset.Path).ToList();
+                    if (found.Count > maps.Count) ignored += found.Count - maps.Count;
+                    if (maps.Count < items[i].Textures)
+                        warnings.Add($"{Path.GetFileName(model.Asset.Path)}: el .ymt declara {items[i].Textures} texturas y solo hay {maps.Count}.");
+                    var drawable = DrawableImporter.Create(project, projectDir, model.Asset.Path, model.Name, variation.Gender, maps, package, warnings);
                     drawable.Skin |= items[i].Skin;
+                    // A resource uses its "_1" models in first person only where its own .meta says so.
+                    drawable.Flags.AlternateInFirstPerson = firstPerson.Contains(Path.GetFileNameWithoutExtension(model.Asset.Path).Replace('^', '/'));
                     drawable.Flags.HeelHeight = items[i].HeelHeight > 0 ? items[i].HeelHeight : null;
                     if (slot.Prop == PropSlot.Hat) drawable.Flags.HatHair = HatHairOf(items[i].HairScale);
                     used.Add(model.Asset.Path);
@@ -98,6 +115,17 @@ public static class ResourceImporter
                     added.Add(drawable);
                 }
             }
+        }
+
+        if (ignored > 0)
+            warnings.Add($"{ignored} texturas no las declara el .ymt (suelen ser restos de una generación anterior) y no se han importado.");
+
+        foreach (var meta in metas)
+        {
+            if (AlternateVariationsFile.TryRead(meta, warnings) is not { Count: > 0 } switches) continue;
+            project.AlternateVariations.AddRange(switches);
+            if (hadGarments)
+                warnings.Add("El proyecto ya tenía prendas: los interruptores usan los números del recurso original; revisa que coincidan con los del proyecto.");
         }
 
         var reserved = added.Count(d => d.Reserved);
@@ -110,6 +138,26 @@ public static class ResourceImporter
         // "mp_m_eup" and "mp_f_eup" share the collection "eup" in a project.
         var names = variations.Select(v => StripGender(v.Collection)).Distinct().ToList();
         return new ResourceImportResult(added, warnings, names.Count == 1 ? names[0] : null);
+    }
+
+    // Asset names ("<ped>_<collection>/<model>") listed in the resource's first person alternates files.
+    private static HashSet<string> FirstPersonAssets(IEnumerable<string> metas)
+    {
+        var assets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var meta in metas)
+        {
+            try
+            {
+                var root = XDocument.Load(meta).Root;
+                if (root?.Name.LocalName != "FirstPersonAlternateData") continue;
+                foreach (var name in root.Descendants("assetName")) assets.Add(name.Value.Trim());
+            }
+            catch (XmlException)
+            {
+                // Not XML: not a first person file either.
+            }
+        }
+        return assets;
     }
 
     private static HatHair HatHairOf(float scale) => scale switch

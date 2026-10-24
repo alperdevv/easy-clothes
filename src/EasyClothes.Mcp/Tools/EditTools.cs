@@ -65,7 +65,7 @@ public sealed class EditTools(Workspace workspace)
     }
 
     [McpServerTool(Name = "import_garments", Destructive = false, OpenWorld = false)]
-    [Description("Importa prendas: archivos .ydd sueltos (con sus texturas, modelo de primera persona _1.ydd y físicas .yld al lado) o carpetas. Una carpeta de recurso ya generado (con su .ymt) conserva el número y las opciones de cada prenda. Los zapatos con tacón se detectan solos.")]
+    [Description("Importa prendas: archivos .ydd sueltos (con sus texturas, modelo de primera persona _1.ydd y físicas .yld al lado) o carpetas. Una carpeta de recurso ya generado (con su .ymt) conserva el número y las opciones de cada prenda, solo las texturas que declara el .ymt y su pedalternatevariations.meta. Cada prenda guarda de qué carpeta y archivo viene. Los zapatos con tacón se detectan solos.")]
     public async Task<ImportSummary> ImportGarments(
         [Description(ProjectParam)] string project,
         [Description("Rutas de archivos .ydd o de carpetas.")] string[] paths,
@@ -92,10 +92,21 @@ public sealed class EditTools(Workspace workspace)
         [Description("Código del hueco (jbib, lowr, feet, p_head…) o su nombre (Top, Legs, Shoes, Hat…).")] string? slot = null,
         [Description("Solo calzado: altura del tacón (1 = tacones del juego, unos 9 cm). 0 los quita.")] float? heelHeight = null,
         [Description("Solo sombreros: pelo debajo, keep (entero), cut (recortado) o remove (oculto).")] string? hatHair = null,
+        [Description("Si el modelo alternativo _1.ydd se usa en primera persona (true) o solo mediante pedalternatevariations (false).")] bool? alternateInFirstPerson = null,
+        [Description("Origen: paquete (carpeta, recurso o DLC) del que viene la prenda.")] string? sourcePackage = null,
+        [Description("Origen: nombre del archivo del modelo en ese paquete.")] string? sourceFile = null,
         CancellationToken ct = default)
     {
         var loaded = await workspace.LoadAsync(project, ct);
         var d = Workspace.FindGarment(loaded.Project, garment);
+        if (sourcePackage is not null || sourceFile is not null)
+        {
+            var package = sourcePackage ?? d.Source?.Package;
+            var file = sourceFile ?? d.Source?.File;
+            if (string.IsNullOrWhiteSpace(package) || string.IsNullOrWhiteSpace(file))
+                throw new McpException($"{d.Name} no tiene origen; indica sourcePackage y sourceFile a la vez.");
+            d.Source = new GarmentSource { Package = package.Trim(), File = file.Trim() };
+        }
         var regroup = false;
         if (name is not null) d.Name = name;
         if (gender is not null && Workspace.ParseGender(gender) is var g && g != d.Gender)
@@ -119,6 +130,7 @@ public sealed class EditTools(Workspace workspace)
             if (d.Prop != PropSlot.Hat) throw new McpException($"{d.Name} no es un sombrero (p_head).");
             d.Flags.HatHair = Enum.TryParse<HatHair>(hatHair, ignoreCase: true, out var hair) ? hair : throw new McpException("hatHair debe ser keep, cut o remove.");
         }
+        if (alternateInFirstPerson is { } inFirstPerson) d.Flags.AlternateInFirstPerson = inFirstPerson;
         await Workspace.SaveAsync(loaded, ct);
         return Describe.Garment(loaded.Project, d);
     }
@@ -252,7 +264,7 @@ public sealed class EditTools(Workspace workspace)
     }
 
     [McpServerTool(Name = "build_resource", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Description("Genera el recurso de FiveM (fxmanifest.lua, stream con .ymt y archivos renombrados, .meta de tienda, tacones y sombreros, primera persona, tatuajes). Solo sobrescribe carpetas vacías o generadas por EasyClothes. Falla con la lista de errores si el proyecto tiene alguno.")]
+    [Description("Genera el recurso de FiveM (fxmanifest.lua, stream con .ymt y archivos renombrados, .meta de tienda, tacones y sombreros, primera persona, pedalternatevariations.meta si el proyecto tiene interruptores, tatuajes). Solo sobrescribe carpetas vacías o generadas por EasyClothes. Falla con la lista de errores si el proyecto tiene alguno.")]
     public async Task<BuildReport> BuildResource(
         [Description(ProjectParam)] string project,
         [Description("Carpeta de salida; su nombre será el del recurso. Por defecto, build/<colección> dentro del proyecto.")] string? output = null,

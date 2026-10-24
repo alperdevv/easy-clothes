@@ -16,6 +16,9 @@ public sealed class ClothingProject
     public List<Drawable> Drawables { get; set; } = [];
     public List<Tattoo> Tattoos { get; set; } = [];
 
+    // Switches from an imported pedalternatevariations.meta, written back on export.
+    public List<AlternateVariation> AlternateVariations { get; set; } = [];
+
     // A valid collection name (lowercase letters, digits and underscores) derived from a display name.
     public static string CollectionNameFrom(string name)
     {
@@ -75,7 +78,35 @@ public sealed class Drawable
     // Set on props made from the user's own .obj, so they can be placed again later.
     public ImportedModel? Imported { get; set; }
 
+    // Where an imported garment came from, to trace it back to its pack.
+    public GarmentSource? Source { get; set; }
+
     public bool IsProp => Prop is not null;
+}
+
+// Package is the imported folder (a resource or a mod) and File the model's name inside it.
+public sealed class GarmentSource
+{
+    public required string Package { get; set; }
+    public required string File { get; set; }
+}
+
+// While the ped wears any of the sources, the target component uses its alternate model ("_1.ydd").
+// Indices are the game's own (base game and every DLC before this pack, plus the number in the pack),
+// kept as imported: the project does not know how many garments the game has in each slot.
+public sealed class AlternateVariation
+{
+    public PedGender Gender { get; set; }
+    public int Component { get; set; }
+    public int Index { get; set; }
+    public int Alt { get; set; } = 1;
+    public List<AlternateSource> Sources { get; set; } = [];
+}
+
+public sealed class AlternateSource
+{
+    public int Component { get; set; }
+    public int Index { get; set; }
 }
 
 public sealed class TextureVariation
@@ -104,6 +135,10 @@ public sealed class DrawableFlags
     public float? HeelHeight { get; set; }
 
     public bool KnockOffOnHit { get; set; }
+
+    // The "_1" model replaces the garment in first person. Packs like EUP use it only through
+    // pedalternatevariations switches instead, and then it must not be declared for first person.
+    public bool AlternateInFirstPerson { get; set; } = true;
 }
 
 public sealed class Tattoo

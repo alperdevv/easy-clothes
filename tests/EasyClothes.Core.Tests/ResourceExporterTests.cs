@@ -105,6 +105,20 @@ public sealed class ResourceExporterTests : IDisposable
     }
 
     [Fact]
+    public void An_alternate_used_only_by_switches_is_streamed_but_not_declared_for_first_person()
+    {
+        var mask = Item("mask", PedGender.Male, ComponentSlot.Mask);
+        mask.FirstPersonModelPath = Extra("mask_alt.ydd");
+        mask.Flags.AlternateInFirstPerson = false;
+
+        ResourceExporter.Export(Project(mask), _dir, Output);
+
+        Assert.True(File.Exists(Path.Combine(Output, "stream", "mp_m_freemode_01", "mp_m_freemode_01_ropa^berd_000_u_1.ydd")));
+        Assert.True(PedVariation.Read(ResourceFile.Read(Path.Combine(Output, "stream", "mp_m_freemode_01_ropa.ymt"))).Components[ComponentSlot.Mask][0].FirstPerson);
+        Assert.False(File.Exists(Path.Combine(Output, "first_person_alternates_ropa.meta")));
+    }
+
+    [Fact]
     public void Export_refuses_projects_with_errors()
     {
         var project = Project(Item("rota", PedGender.Male, ComponentSlot.Top, textures: 1));

@@ -5,7 +5,7 @@ namespace EasyClothes.Mcp;
 
 public sealed record GarmentSummary(
     string Id, string Name, string Gender, string Slot, string SlotCode, int Number, int Textures,
-    bool Reserved, bool FirstPerson, bool ClothPhysics, float? HeelHeight, string? HatHair);
+    bool Reserved, bool AlternateModel, bool FirstPerson, bool ClothPhysics, float? HeelHeight, string? HatHair, string? SourcePackage, string? SourceFile);
 
 public sealed record TattooSummary(string Id, string Name, string Zone, IReadOnlyList<string> Genders);
 
@@ -21,9 +21,10 @@ public static class Describe
         d.Component?.ToString() ?? $"Prop{d.Prop}",
         d.Component is { } c ? PedSlotNames.FileCode(c) : d.Prop is { } p ? PedSlotNames.FileCode(p) : "?",
         DrawableOrder.NumberOf(project, d), d.Textures.Count, d.Reserved,
-        d.FirstPersonModelPath is not null, d.ClothPhysicsPath is not null,
+        d.FirstPersonModelPath is not null, d.FirstPersonModelPath is not null && d.Flags.AlternateInFirstPerson, d.ClothPhysicsPath is not null,
         d.Component == ComponentSlot.Shoes ? d.Flags.HeelHeight : null,
-        d.Prop == PropSlot.Hat ? d.Flags.HatHair.ToString() : null);
+        d.Prop == PropSlot.Hat ? d.Flags.HatHair.ToString() : null,
+        d.Source?.Package, d.Source?.File);
 
     public static IEnumerable<GarmentSummary> Garments(ClothingProject project) =>
         project.Drawables

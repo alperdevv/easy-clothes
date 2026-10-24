@@ -26,7 +26,9 @@ public sealed class ResourceImporterTests : IDisposable
             new Dictionary<PropSlot, IReadOnlyList<VariationDrawable>> { [PropSlot.Hat] = [new(1) { HairScale = -1f }] })
             .Write(Path.Combine(stream, "mp_m_freemode_01_mp_m_ropa.ymt"));
         File.WriteAllBytes(Path.Combine(stream, "mp_creaturemetadata_m_ropa.ymt"), CreatureMetadata.Write([0], [0]));
-        Touch(tops, "mp_m_freemode_01_mp_m_ropa^jbib_000_u.ydd", "mp_m_freemode_01_mp_m_ropa^jbib_diff_000_a_uni.ytd", "mp_m_freemode_01_mp_m_ropa^jbib_diff_000_b_uni.ytd");
+        // "c" is left over from an older build: the .ymt only declares two textures.
+        Touch(tops, "mp_m_freemode_01_mp_m_ropa^jbib_000_u.ydd", "mp_m_freemode_01_mp_m_ropa^jbib_diff_000_a_uni.ytd", "mp_m_freemode_01_mp_m_ropa^jbib_diff_000_b_uni.ytd", "mp_m_freemode_01_mp_m_ropa^jbib_diff_000_c_uni.ytd");
+        Touch(tops, "mp_m_freemode_01_mp_m_ropa^jbib_000_u_1.ydd");
         Touch(tops, "mp_m_freemode_01_mp_m_ropa^jbib_002_r.ydd", "mp_m_freemode_01_mp_m_ropa^jbib_diff_002_a_whi.ytd", "mp_m_freemode_01_mp_m_ropa^jbib_009_u.ydd");
         Touch(stream, "mp_m_freemode_01_mp_m_ropa^feet_000_u.ydd", "mp_m_freemode_01_mp_m_ropa^feet_diff_000_a_uni.ytd");
         Touch(stream, "mp_m_freemode_01_p_mp_m_ropa^p_head_000.ydd", "mp_m_freemode_01_p_mp_m_ropa^p_head_diff_000_a.ytd");
@@ -40,6 +42,10 @@ public sealed class ResourceImporterTests : IDisposable
         Assert.Equal(["jbib_000", "reservado 1", "jbib_002"], ClothingProject.InGameOrder(project.Drawables.Where(d => d.Component == ComponentSlot.Top)).Select(d => d.Name));
         var top = project.Drawables.Single(d => d.Name == "jbib_000");
         Assert.Equal(["a", "b"], top.Textures.Select(t => Path.GetFileNameWithoutExtension(t.TexturePath)[^5..^4]));
+        Assert.Contains(result.Warnings, w => w.StartsWith("1 texturas no las declara el .ymt"));
+        Assert.NotNull(top.FirstPersonModelPath);
+        Assert.False(top.Flags.AlternateInFirstPerson);
+        Assert.Equal(("pack", "mp_m_freemode_01_mp_m_ropa^jbib_000_u.ydd"), (top.Source?.Package, top.Source?.File));
         Assert.True(project.Drawables.Single(d => d.Name == "jbib_002").Skin);
         Assert.Equal(1.3f, project.Drawables.Single(d => d.Component == ComponentSlot.Shoes).Flags.HeelHeight);
         Assert.Equal(HatHair.Remove, project.Drawables.Single(d => d.Prop == PropSlot.Hat).Flags.HatHair);
@@ -70,6 +76,8 @@ public sealed class ResourceImporterTests : IDisposable
         DrawableOrder.Reserve(source, PedGender.Female, ComponentSlot.Top, null);
         Garment("tacon", PedGender.Female, ComponentSlot.Shoes).Flags.HeelHeight = 1.4f;
         Garment("gorro", PedGender.Male, prop: PropSlot.Hat).Flags.HatHair = HatHair.Keep;
+        source.AlternateVariations.Add(new AlternateVariation { Gender = PedGender.Female, Component = 11, Index = 656, Sources = [new() { Component = 8, Index = 300 }, new() { Component = 8, Index = 301 }] });
+        source.AlternateVariations.Add(new AlternateVariation { Gender = PedGender.Male, Component = 1, Index = 249, Sources = [new() { Component = 11, Index = 664 }] });
         var resource = Path.Combine(_root, "out", "ropa");
         ResourceExporter.Export(source, dir, resource);
 
@@ -81,9 +89,54 @@ public sealed class ResourceImporterTests : IDisposable
         var tops = ClothingProject.InGameOrder(project.Drawables.Where(d => d.Component == ComponentSlot.Top)).ToList();
         Assert.Equal(["zeta", "alfa", "reserved"], tops.Select(d => d.Reserved ? "reserved" : File.ReadAllText(Path.Combine(ProjectDir, d.ModelPath))));
         Assert.Equal("fp", File.ReadAllText(Path.Combine(ProjectDir, tops[1].FirstPersonModelPath!)));
+        Assert.True(tops[1].Flags.AlternateInFirstPerson);
         Assert.Equal("cloth", File.ReadAllText(Path.Combine(ProjectDir, tops[1].ClothPhysicsPath!)));
         Assert.Equal(1.4f, project.Drawables.Single(d => d.Component == ComponentSlot.Shoes).Flags.HeelHeight);
         Assert.Equal(HatHair.Keep, project.Drawables.Single(d => d.Prop == PropSlot.Hat).Flags.HatHair);
+
+        Assert.Contains("data_file 'ALTERNATE_VARIATIONS_FILE' 'pedalternatevariations.meta'", File.ReadAllText(Path.Combine(resource, "fxmanifest.lua")));
+        Assert.Equal(
+            source.AlternateVariations.OrderBy(s => s.Gender).Select(Describe),
+            project.AlternateVariations.Select(Describe));
+    }
+
+    private static string Describe(AlternateVariation s) =>
+        $"{s.Gender} {s.Component}/{s.Index} alt {s.Alt} <- {string.Join(",", s.Sources.Select(a => $"{a.Component}/{a.Index}"))}";
+
+    [Fact]
+    public void Reads_the_switches_of_an_eup_style_alternate_variations_file()
+    {
+        var path = Path.Combine(_root, "pedalternatevariations.meta");
+        File.WriteAllText(path, """
+            <?xml version="1.0" encoding="utf-8"?>
+            <CAlternateVariations>
+              <peds>
+                <Item>
+                  <name>mp_m_freemode_01</name>
+                  <switches>
+                    <Item>
+                      <component value="10" />
+                      <index value="305" />
+                      <alt value="1" />
+                      <sourceAssets>
+                        <Item><component value="8" /><index value="222" /></Item>
+                      </sourceAssets>
+                    </Item>
+                    <Item><component value="10" /><alt value="1" /></Item>
+                  </switches>
+                </Item>
+                <Item><name>a_m_y_hipster_01</name><switches /></Item>
+              </peds>
+            </CAlternateVariations>
+            """);
+        var warnings = new List<string>();
+
+        var switches = AlternateVariationsFile.TryRead(path, warnings);
+
+        Assert.Equal(["Male 10/305 alt 1 <- 8/222"], switches!.Select(Describe));
+        Assert.Equal(2, warnings.Count);
+        File.WriteAllText(path, "<ShopPedApparel />");
+        Assert.Null(AlternateVariationsFile.TryRead(path, warnings));
     }
 
     private static void Touch(string dir, params string[] names)

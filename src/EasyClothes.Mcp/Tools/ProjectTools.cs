@@ -12,7 +12,7 @@ public sealed record ProjectEntry(string File, string Name, string Collection, i
 
 public sealed record ProjectSummary(
     string File, string Name, string Collection, string? Author, string? Description,
-    IReadOnlyList<GarmentSummary> Garments, IReadOnlyList<TattooSummary> Tattoos, int Errors, int Warnings, string Note);
+    IReadOnlyList<GarmentSummary> Garments, IReadOnlyList<TattooSummary> Tattoos, int AlternateSwitches, int Errors, int Warnings, string Note);
 
 public sealed record TextureDetail(string Letter, string File, int? Width, int? Height, string? Format, int? Mips, int? MemoryKiB);
 
@@ -50,7 +50,7 @@ public sealed class ProjectTools(Workspace workspace)
     }
 
     [McpServerTool(Name = "get_project", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Resumen de un proyecto: colección, prendas por sexo y hueco con su número en el juego, opciones (tacones, primera persona, físicas, pelo bajo sombrero), tatuajes y número de problemas estructurales.")]
+    [Description("Resumen de un proyecto: colección, prendas por sexo y hueco con su número en el juego, opciones (tacones, primera persona, físicas, pelo bajo sombrero), origen de cada prenda (paquete y archivo importados), tatuajes, interruptores de pedalternatevariations y número de problemas estructurales.")]
     public async Task<ProjectSummary> GetProject(
         [Description("Archivo .ecproj o la carpeta que lo contiene.")] string project,
         CancellationToken ct)
@@ -60,9 +60,10 @@ public sealed class ProjectTools(Workspace workspace)
         var issues = ProjectValidator.Validate(p, loaded.Dir);
         return new ProjectSummary(
             loaded.File, p.Name, p.CollectionName, p.Author, p.Description,
-            Describe.Garments(p).ToList(), p.Tattoos.Select(Describe.Tattoo).ToList(),
+            Describe.Garments(p).ToList(), p.Tattoos.Select(Describe.Tattoo).ToList(), p.AlternateVariations.Count,
             issues.Count(i => i.Severity == IssueSeverity.Error), issues.Count(i => i.Severity == IssueSeverity.Warning),
-            "Number es el número de la prenda en el juego dentro de su hueco. validate analiza además modelos y texturas.");
+            "Number es el número de la prenda en el juego dentro de su hueco; SourcePackage y SourceFile dicen de qué carpeta y archivo se importó. "
+            + "AlternateSwitches son los interruptores de modelo alternativo (_1.ydd) que build_resource escribe en pedalternatevariations.meta, con los números absolutos del juego del recurso importado. validate analiza además modelos y texturas.");
     }
 
     [McpServerTool(Name = "get_garment", ReadOnly = true, Idempotent = true, OpenWorld = false)]

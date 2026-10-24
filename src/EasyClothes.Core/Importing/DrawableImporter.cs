@@ -4,7 +4,11 @@ using EasyClothes.Core.Projects;
 
 namespace EasyClothes.Core.Importing;
 
-public sealed record ImportResult<T>(IReadOnlyList<T> Added, IReadOnlyList<string> Warnings);
+public sealed record ImportResult<T>(IReadOnlyList<T> Added, IReadOnlyList<string> Warnings)
+{
+    // Models skipped because their name does not say which slot they belong to.
+    public IReadOnlyList<string> UnrecognizedNames { get; init; } = [];
+}
 
 public static class DrawableImporter
 {
@@ -16,13 +20,18 @@ public static class DrawableImporter
     {
         var added = new List<Drawable>();
         var warnings = new List<string>();
+        var unrecognized = new List<string>();
         var texturesByDir = new Dictionary<string, List<(string Path, TextureName Name)>>();
 
-        var ownAssets = Path.GetFullPath(projectDir) + Path.DirectorySeparatorChar;
-        foreach (var modelPath in ExpandModels(paths).Where(p => !p.StartsWith(ownAssets, StringComparison.OrdinalIgnoreCase)))
+        var models = ExpandModelsWithPackage(paths).ToList();
+        var own = models.Count(m => IsProjectFile(projectDir, m.Path));
+        if (own > 0)
+            warnings.Add($"{own} modelo(s) ya son archivos del proyecto (carpeta {AssetsFolder} o copias de seguridad) y no se han vuelto a importar.");
+        foreach (var (modelPath, package) in models.Where(m => !IsProjectFile(projectDir, m.Path)))
         {
             if (StreamName.ParseModel(modelPath) is not { } model)
             {
+                unrecognized.Add(modelPath);
                 warnings.Add($"{Path.GetFileName(modelPath)}: el nombre no sigue el formato <tipo>_000.ydd, no se puede saber a qué hueco pertenece.");
                 continue;
             }
@@ -38,17 +47,26 @@ public static class DrawableImporter
             if (textures.Count == 0)
                 warnings.Add($"{Path.GetFileName(modelPath)}: no se encontraron texturas junto al modelo.");
 
-            var drawable = Create(project, projectDir, modelPath, model, gender, textures, warnings);
+            var drawable = Create(project, projectDir, modelPath, model, gender, textures, package, warnings);
             DrawableOrder.PlaceAtEnd(project, drawable);
             project.Drawables.Add(drawable);
             added.Add(drawable);
         }
 
-        return new ImportResult<Drawable>(added, warnings);
+        return new ImportResult<Drawable>(added, warnings) { UnrecognizedNames = unrecognized };
+    }
+
+    // Files the project already owns: its copied assets and backups. Anything else inside the
+    // project folder (a model dropped next to the .ecproj, say) can be imported like any other.
+    internal static bool IsProjectFile(string projectDir, string path)
+    {
+        var full = Path.GetFullPath(path);
+        return new[] { AssetsFolder, ProjectFile.BackupsFolder }
+            .Any(folder => full.StartsWith(Path.Combine(Path.GetFullPath(projectDir), folder) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
     }
 
     // Copies one model with its textures, first person model and cloth physics; the caller adds it to the project.
-    internal static Drawable Create(ClothingProject project, string projectDir, string modelPath, ModelName model, PedGender gender, IReadOnlyList<string> textures, List<string> warnings)
+    internal static Drawable Create(ClothingProject project, string projectDir, string modelPath, ModelName model, PedGender gender, IReadOnlyList<string> textures, string package, List<string> warnings)
     {
         var name = $"{model.Slot.FileCode}_{model.Index:D3}";
         var targetDir = UniqueDir(projectDir, Path.Combine(AssetsFolder, gender.ToString().ToLowerInvariant(), name));
@@ -63,6 +81,7 @@ public static class DrawableImporter
             Textures = textures.Take(Drawable.MaxTextures)
                 .Select(t => new TextureVariation { TexturePath = CopyInto(projectDir, targetDir, t) })
                 .ToList(),
+            Source = new GarmentSource { Package = package, File = Path.GetFileName(modelPath) },
         };
         var firstPerson = Path.Combine(Path.GetDirectoryName(modelPath)!, Path.GetFileNameWithoutExtension(modelPath) + "_1.ydd");
         if (File.Exists(firstPerson)) drawable.FirstPersonModelPath = CopyInto(projectDir, targetDir, firstPerson);
@@ -96,11 +115,17 @@ public static class DrawableImporter
 
     // Folders are searched recursively; a file or folder listed twice is imported once.
     public static IEnumerable<string> ExpandModels(IEnumerable<string> paths) =>
-        paths.SelectMany<string, string>(path => Directory.Exists(path)
-                ? Directory.EnumerateFiles(path, "*.ydd", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase)
-                : [path])
-            .Select(Path.GetFullPath)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
+        ExpandModelsWithPackage(paths).Select(m => m.Path);
+
+    // The package is the folder that was imported, or the folder holding a file chosen on its own.
+    private static IEnumerable<(string Path, string Package)> ExpandModelsWithPackage(IEnumerable<string> paths) =>
+        paths.SelectMany<string, (string Path, string Package)>(path => Directory.Exists(path)
+                ? Directory.EnumerateFiles(path, "*.ydd", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase).Select(f => (f, PackageName(path)))
+                : [(path, PackageName(Path.GetDirectoryName(Path.GetFullPath(path)) ?? path))])
+            .Select(m => (Path.GetFullPath(m.Item1), m.Item2))
+            .DistinctBy(m => m.Item1, StringComparer.OrdinalIgnoreCase);
+
+    internal static string PackageName(string dir) => Path.GetFileName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(dir)));
 
     internal static List<string> FindTextures(Dictionary<string, List<(string Path, TextureName Name)>> cache, string modelPath, ModelName model, PedGender gender)
     {

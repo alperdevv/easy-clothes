@@ -82,7 +82,7 @@ public static class ResourceExporter
                     if (d.FirstPersonModelPath is not null)
                     {
                         files += Copy(projectDir, d.FirstPersonModelPath, pedStream, $"{model}_1.ydd");
-                        firstPerson.Add(model.Replace('^', '/'));
+                        if (d.Flags.AlternateInFirstPerson) firstPerson.Add(model.Replace('^', '/'));
                     }
                     if (d.ClothPhysicsPath is not null)
                         files += Copy(projectDir, d.ClothPhysicsPath, pedStream, $"{model}.yld");
@@ -140,7 +140,14 @@ public static class ResourceExporter
         {
             var alternates = $"first_person_alternates_{collection}.meta";
             SaveXml(FirstPersonAlternates(firstPerson), Path.Combine(dir, alternates));
-            dataFiles.Add(("PED_FIRST_PERSON_ALTERNATE_DATA", alternates));
+            dataFiles.Add((FirstPersonDataFileType, alternates));
+            files++;
+        }
+
+        if (project.AlternateVariations.Count > 0)
+        {
+            SaveXml(AlternateVariationsFile.Write(project.AlternateVariations), Path.Combine(dir, AlternateVariationsFile.FileName));
+            dataFiles.Add((AlternateVariationsFile.DataFileType, AlternateVariationsFile.FileName));
             files++;
         }
 
@@ -251,6 +258,8 @@ public static class ResourceExporter
             new XElement("pedProps")));
 
     // Asset names are "<ped>_<collection>/<model>"; alternate 1 is the "_1.ydd" streamed next to the model.
+    public const string FirstPersonDataFileType = "PED_FIRST_PERSON_ALTERNATE_DATA";
+
     private static XDocument FirstPersonAlternates(IEnumerable<string> models) => new(
         new XDeclaration("1.0", "UTF-8", null),
         new XElement("FirstPersonAlternateData",

@@ -82,7 +82,26 @@ public sealed class ImporterTests : IDisposable
 
         Assert.Single(result.Added);
         Assert.Equal(2, result.Warnings.Count);
+        Assert.Equal([unknown], result.UnrecognizedNames);
         Assert.Contains(ProjectValidator.Validate(project, ProjectDir), i => i.Message.Contains("no tiene texturas"));
+    }
+
+    [Fact]
+    public void Models_saved_in_the_project_folder_import_but_its_own_assets_do_not()
+    {
+        File.WriteAllText(Path.Combine(ProjectDir, "jbib_005_u.ydd"), "dropped next to the project");
+        File.WriteAllText(Path.Combine(ProjectDir, "jbib_diff_005_a_uni.ytd"), "texture");
+        var project = NewProject();
+
+        var first = DrawableImporter.Import(project, ProjectDir, [ProjectDir], PedGender.Female);
+        var again = DrawableImporter.Import(project, ProjectDir, [ProjectDir], PedGender.Female);
+
+        var garment = Assert.Single(first.Added);
+        Assert.StartsWith(DrawableImporter.AssetsFolder + "/", garment.ModelPath);
+        Assert.Single(garment.Textures);
+        Assert.Empty(first.Warnings);
+        Assert.Equal("jbib_005 (2)", Assert.Single(again.Added).Name);
+        Assert.Contains(again.Warnings, w => w.StartsWith("1 modelo(s) ya son archivos del proyecto"));
     }
 
     [Fact]
