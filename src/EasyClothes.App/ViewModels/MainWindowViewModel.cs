@@ -864,6 +864,31 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         Status = $"{drawable.Name} recolocado; el modelo anterior está en {backup}.";
     }
 
+    // Moves a prop from a pack in place; every change starts from the model as it was imported.
+    [RelayCommand]
+    private async Task AdjustPropAsync()
+    {
+        if (Selected is not { Model: { Prop: { } slot, Reserved: false } drawable }) return;
+        MeshData original;
+        try
+        {
+            original = await Task.Run(() => PropAdjuster.LoadOriginal(ProjectDir!, drawable));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
+        {
+            Status = $"No se pudo leer el modelo de {drawable.Name}: {ex.Message}";
+            return;
+        }
+        var placement = new ModelPlacementViewModel(dialogs, original, drawable.Name, $"Colocar {drawable.Name}", drawable.Adjusted?.Placement ?? new PropPlacement(),
+            drawable.Gender, slot, editing: true, ModelStageFor, (mesh, p, s) => PropAdjuster.Place(mesh, s, p), fit: null, Preview?.Texture);
+        await dialogs.PlaceModelAsync(placement);
+        if (!placement.Confirmed) return;
+        if (await RunGarmentJobAsync(() => PropAdjuster.Apply(ProjectDir!, drawable, placement.Placement)) is not { } backup) return;
+        MarkChanged(rebuildTree: false);
+        _ = LoadPreviewAsync();
+        Status = $"{drawable.Name} recolocado; el modelo anterior está en {backup}.";
+    }
+
     private async Task<ObjModel?> ReadObjAsync(string path)
     {
         try
@@ -916,7 +941,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         {
             return await Task.Run(job);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or InvalidDataException or NotSupportedException)
         {
             Status = $"No se pudo guardar la prenda: {ex.Message}";
             return default;

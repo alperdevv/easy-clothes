@@ -77,12 +77,12 @@
               <StackPanel>
                 <DockPanel>
                   <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2">
-                    <Button Classes="flat small" Command="{Binding FitCommand}"
+                    <Button Classes="flat small" Command="{Binding FitCommand}" IsVisible="{Binding IsObj}"
                             ToolTip.Tip="Corrige unidades (cm, mm) y lo coloca centrado sobre la cabeza">
                       <ui:IconLabel Icon="{StaticResource Icon.Crosshair}" IconSize="13" Spacing="5" Text="Encajar" />
                     </Button>
                     <Button Classes="flat small" Command="{Binding ResetCommand}"
-                            ToolTip.Tip="Tal cual viene en el .obj: lo correcto si lo modelaste sobre la cabeza de referencia">
+                            ToolTip.Tip="Como venía el modelo, sin moverlo">
                       <ui:IconLabel Icon="{StaticResource Icon.RotateCcw}" IconSize="13" Spacing="5" Text="Original" />
                     </Button>
                   </StackPanel>
@@ -126,7 +126,7 @@
               </StackPanel>
             </Border>
 
-            <Border Classes="card">
+            <Border Classes="card" IsVisible="{Binding IsObj}">
               <StackPanel>
                 <ui:IconLabel Classes="section" Icon="{StaticResource Icon.Smile}" Text="MODELAR EN BLENDER" />
                 <TextBlock Classes="muted" TextWrapping="Wrap"

@@ -26,7 +26,7 @@ public static class DrawableDictionary
 {
     public const uint ResourceVersion = 165;
 
-    private static readonly ulong[] DrawableLodLists = [0x50, 0x58, 0x60, 0x68];
+    internal static readonly ulong[] DrawableLodLists = [0x50, 0x58, 0x60, 0x68];
     internal const ulong DrawableName = 0xA8;
 
     internal const ulong ModelGeometries = 0x08;

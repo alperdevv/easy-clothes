@@ -61,6 +61,8 @@ public sealed partial class DrawableViewModel(Drawable model, Action<DrawableVie
     public bool IsGeneratedShirt => Model.Shirt is not null && Model.Component == ComponentSlot.Top && !Model.Reserved;
     public bool IsGenerated => IsGeneratedCap || IsGeneratedShirt;
     public bool IsImportedModel => Model.Imported is not null && !Model.Reserved;
+    // Props from packs; caps and .obj models made here have their own placement.
+    public bool CanAdjustProp => Model.IsProp && !Model.Reserved && Model.Imported is null && Model.Cap is null;
 
     public string FirstPersonLabel => Model.FirstPersonModelPath is { } path ? ShortName(path) : "Ninguno";
     public bool HasFirstPerson => Model.FirstPersonModelPath is not null;

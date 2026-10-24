@@ -323,6 +323,11 @@
                         Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).PlaceImportedModelCommand}">
                   <ui:IconLabel Icon="{StaticResource Icon.Move3d}" Text="Colocar modelo importado…" />
                 </Button>
+                <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,10,0,0" IsVisible="{Binding CanAdjustProp}"
+                        ToolTip.Tip="Mover, girar, inclinar o escalar el accesorio sobre el personaje, en la misma prenda"
+                        Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).AdjustPropCommand}">
+                  <ui:IconLabel Icon="{StaticResource Icon.Move3d}" Text="Colocar / girar…" />
+                </Button>
                 <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,10,0,0" IsVisible="{Binding IsGenerated}"
                         ToolTip.Tip="Cambiar la forma (las texturas siguen encajando) o crear otra textura con otros colores"
                         Command="{Binding $parent[Window].((vm:MainWindowViewModel)DataContext).EditGarmentCommand}">

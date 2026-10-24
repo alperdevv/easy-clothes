@@ -78,6 +78,9 @@ public sealed class Drawable
     // Set on props made from the user's own .obj, so they can be placed again later.
     public ImportedModel? Imported { get; set; }
 
+    // Set on props from a pack that were moved, keeping the untouched model.
+    public PropAdjustment? Adjusted { get; set; }
+
     // Where an imported garment came from, to trace it back to its pack.
     public GarmentSource? Source { get; set; }
 

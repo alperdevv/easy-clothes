@@ -41,7 +41,7 @@ public sealed class ModelTools(Workspace workspace)
     }
 
     [McpServerTool(Name = "place_model", Destructive = false, OpenWorld = false)]
-    [Description("Mueve, gira o escala un modelo importado con import_model (el modelo anterior va a .backups). Los valores que no indiques se mantienen. Sube/baja, adelante/atrás e izquierda en cm; giro, inclinación y ladeo en grados.")]
+    [Description("Mueve, gira o escala un accesorio sin crear otra prenda: un modelo importado con import_model o un accesorio de un pack (p. ej. girar una gorra hacia atrás con turn=180). El modelo anterior va a .backups y, en los de pack, cada cambio parte del modelo original. Los valores que no indiques se mantienen. Sube/baja, adelante/atrás e izquierda en cm; giro, inclinación y ladeo en grados.")]
     public async Task<ImportedModelInfo> PlaceModel(
         [Description("Archivo .ecproj o la carpeta que lo contiene.")] string project,
         [Description("Id de la prenda, o su nombre si es único.")] string garment,
@@ -57,14 +57,25 @@ public sealed class ModelTools(Workspace workspace)
     {
         var loaded = await workspace.LoadAsync(project, ct);
         var drawable = Workspace.FindGarment(loaded.Project, garment);
-        var imported = drawable.Imported ?? throw new McpException($"{drawable.Name} no se importó desde un .obj.");
-        var obj = Read(Path.Combine(loaded.Dir, imported.SourcePath));
-        var p = fit ? ObjProp.Fit(obj.Mesh) : imported.Placement;
-        p = p with
+        PropPlacement With(PropPlacement p) => p with
         {
             Up = upCm ?? p.Up, Forward = forwardCm ?? p.Forward, Left = leftCm ?? p.Left,
             Turn = turn ?? p.Turn, Nod = nod ?? p.Nod, Tilt = tilt ?? p.Tilt, Scale = scale ?? p.Scale,
         };
+        if (drawable.Imported is null)
+        {
+            if (!drawable.IsProp || drawable.Reserved) throw new McpException($"{drawable.Name} no es un accesorio (p_head, p_eyes…); solo se colocan los accesorios.");
+            if (drawable.Cap is not null) throw new McpException($"{drawable.Name} es una gorra de create_cap: gírala con update_cap y rotation.");
+            if (fit) throw new McpException("fit solo sirve para modelos .obj.");
+            var placed = With(drawable.Adjusted?.Placement ?? new PropPlacement());
+            Guard(() => PropAdjuster.Apply(loaded.Dir, drawable, placed));
+            await Workspace.SaveAsync(loaded, ct);
+            var triangles = Guard(() => PropAdjuster.LoadOriginal(loaded.Dir, drawable).TriangleCount);
+            return new ImportedModelInfo(Describe.Garment(loaded.Project, drawable), Info(placed), triangles, []);
+        }
+        var imported = drawable.Imported;
+        var obj = Read(Path.Combine(loaded.Dir, imported.SourcePath));
+        var p = With(fit ? ObjProp.Fit(obj.Mesh) : imported.Placement);
         Guard(() => ObjProp.Replace(loaded.Dir, drawable, p));
         await Workspace.SaveAsync(loaded, ct);
         return new ImportedModelInfo(Describe.Garment(loaded.Project, drawable), Info(p), obj.Mesh.TriangleCount, obj.Warnings);

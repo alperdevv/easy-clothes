@@ -32,7 +32,7 @@ public static class ObjProp
 {
     public static readonly PropSlot[] Slots = [PropSlot.Hat, PropSlot.Glasses, PropSlot.Ears];
 
-    private static readonly Vector3 HeadCentre = new(0.08f, 0.012f, 0);
+    internal static readonly Vector3 HeadCentre = new(0.08f, 0.012f, 0);
     // Where the lowest edge of a hat usually sits, at the back of the head.
     private const float BandBottom = 0.045f;
 
