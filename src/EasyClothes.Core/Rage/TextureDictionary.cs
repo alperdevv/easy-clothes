@@ -12,6 +12,12 @@ public sealed record TextureInfo(string Name, int Width, int Height, string Form
         "DXT1" => TextureFormat.Dxt1,
         "DXT5" => TextureFormat.Dxt5,
         "A8R8G8B8" => TextureFormat.A8R8G8B8,
+        "X8R8G8B8" => TextureFormat.X8R8G8B8,
+        "A8B8G8R8" => TextureFormat.A8B8G8R8,
+        "DXT3" => TextureFormat.Dxt3,
+        "ATI1" => TextureFormat.Bc4,
+        "ATI2" => TextureFormat.Bc5,
+        "BC7" => TextureFormat.Bc7,
         _ => TextureFormat.Unknown,
     };
 }
@@ -65,11 +71,13 @@ public static class TextureDictionary
         21 => "A8R8G8B8",
         22 => "X8R8G8B8",
         28 => "A8",
+        32 => "A8B8G8R8",
         50 => "L8",
+        // FourCCs are padded with spaces, e.g. "BC7 ".
         _ when IsFourCc(format) => string.Create(4, format, (span, f) =>
         {
             for (var i = 0; i < 4; i++) span[i] = (char)((f >> (8 * i)) & 0xFF);
-        }),
+        }).TrimEnd(),
         _ => $"0x{format:X}",
     };
 

@@ -9,7 +9,7 @@ public sealed record TextureOptimization(long OldFileSize, long NewFileSize, int
 public static class TextureOptimizer
 {
     // Downscales to fit maxSide (power-of-two sides), regenerates mips and recompresses:
-    // DXT1/DXT5 keep their format, uncompressed textures become DXT1 or DXT5 depending on alpha.
+    // DXT1/DXT5 keep their format, any other format becomes DXT1 or DXT5 depending on alpha.
     public static TextureOptimization Optimize(string path, int maxSide)
     {
         var oldFileSize = new FileInfo(path).Length;

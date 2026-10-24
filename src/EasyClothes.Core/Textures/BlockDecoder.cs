@@ -1,12 +1,16 @@
+using System.Runtime.InteropServices;
+using BCnEncoder.Decoder;
+using BCnEncoder.Shared;
+
 namespace EasyClothes.Core.Textures;
 
 public static class BlockDecoder
 {
     public static int CompressedSize(TextureFormat format, int width, int height) => format switch
     {
-        TextureFormat.Dxt1 => BlocksWide(width) * BlocksWide(height) * 8,
-        TextureFormat.Dxt5 => BlocksWide(width) * BlocksWide(height) * 16,
-        TextureFormat.A8R8G8B8 => width * height * 4,
+        TextureFormat.Dxt1 or TextureFormat.Bc4 => BlocksWide(width) * BlocksWide(height) * 8,
+        TextureFormat.Dxt3 or TextureFormat.Dxt5 or TextureFormat.Bc5 or TextureFormat.Bc7 => BlocksWide(width) * BlocksWide(height) * 16,
+        TextureFormat.A8R8G8B8 or TextureFormat.X8R8G8B8 or TextureFormat.A8B8G8R8 => width * height * 4,
         _ => throw new NotSupportedException($"Texture format {format} is not supported yet."),
     };
 
@@ -25,15 +29,32 @@ public static class BlockDecoder
                     DecodeAlpha(block, rgba);
                 });
                 break;
-            case TextureFormat.A8R8G8B8:
+            case TextureFormat.A8R8G8B8 or TextureFormat.X8R8G8B8:
                 for (var i = 0; i < width * height; i++)
                 {
                     // Stored as B, G, R, A.
                     pixels[i * 4] = data[i * 4 + 2];
                     pixels[i * 4 + 1] = data[i * 4 + 1];
                     pixels[i * 4 + 2] = data[i * 4];
-                    pixels[i * 4 + 3] = data[i * 4 + 3];
+                    pixels[i * 4 + 3] = format == TextureFormat.X8R8G8B8 ? (byte)255 : data[i * 4 + 3];
                 }
+                break;
+            case TextureFormat.A8B8G8R8:
+                data[..pixels.Length].CopyTo(pixels);
+                break;
+            case TextureFormat.Dxt3:
+                DecodeWithBcn(data, width, height, CompressionFormat.Bc2, pixels);
+                break;
+            case TextureFormat.Bc4:
+                DecodeWithBcn(data, width, height, CompressionFormat.Bc4, pixels);
+                for (var i = 0; i < pixels.Length; i += 4)
+                    pixels[i + 1] = pixels[i + 2] = pixels[i];
+                break;
+            case TextureFormat.Bc5:
+                DecodeWithBcn(data, width, height, CompressionFormat.Bc5, pixels);
+                break;
+            case TextureFormat.Bc7:
+                DecodeWithBcn(data, width, height, CompressionFormat.Bc7, pixels);
                 break;
             default:
                 throw new NotSupportedException($"Texture format {format} is not supported yet.");
@@ -62,6 +83,12 @@ public static class BlockDecoder
                 block.Slice((py * 4 + px) * 4, 4).CopyTo(pixels.AsSpan((y * width + x) * 4, 4));
             }
         }
+    }
+
+    private static void DecodeWithBcn(ReadOnlySpan<byte> data, int width, int height, CompressionFormat format, byte[] pixels)
+    {
+        var decoded = new BcDecoder().DecodeRaw(data.ToArray(), width, height, format);
+        MemoryMarshal.AsBytes(decoded.AsSpan()).CopyTo(pixels);
     }
 
     private static void DecodeColour(ReadOnlySpan<byte> block, Span<byte> rgba, bool allowAlpha)
