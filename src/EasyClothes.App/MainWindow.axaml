@@ -52,6 +52,10 @@
         </StackPanel>
 
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+          <Button Classes="flat" Classes.accent="{Binding UpdateAvailable}" Command="{Binding UpdateCommand}"
+                  ToolTip.Tip="Buscar una versión nueva de EasyClothes e instalarla">
+            <ui:IconLabel Icon="{StaticResource Icon.Download}" Text="{Binding UpdateLabel}" />
+          </Button>
           <Button Classes="flat" Command="{Binding ConnectClaudeCommand}" ToolTip.Tip="Deja que Claude (Desktop o Code) trabaje en tus proyectos con EasyClothes">
             <ui:IconLabel Icon="{StaticResource Icon.Plug}" Text="Conectar con Claude" />
           </Button>

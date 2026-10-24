@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Text.Json;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -181,7 +183,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
             Status = $"Proyecto abierto: {path}";
             SelectedNode = Tree.SelectMany(g => g.Children).SelectMany(s => s.Children).FirstOrDefault();
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException)
         {
             Status = $"No se pudo abrir el proyecto: {ex.Message}";
         }
@@ -275,7 +277,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         {
             project = await ProjectFile.LoadAsync(file);
         }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException)
         {
             Status = $"El proyecto cambió fuera de la app pero no se pudo leer: {ex.Message}";
             return;
@@ -423,7 +425,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
             ClaudeConnection.AddToDesktop(desktop!, McpServerPath, args);
             Status = "EasyClothes añadido a Claude Desktop. Ciérralo del todo (también desde la bandeja) y vuelve a abrirlo.";
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or System.Text.Json.JsonException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or JsonException)
         {
             Status = $"No se pudo modificar la configuración de Claude Desktop ({desktop}): {ex.Message}";
         }
@@ -591,8 +593,129 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         MarkChanged(rebuildTree: true);
         Status = $"{result.Added.Count(d => !d.Reserved)} prenda(s) importada(s)." + WarningsSummary(result.Warnings);
         if (result.Added.LastOrDefault() is { } last) Select(last.Id);
+        if (ImportProblem(result) is var (title, message)) await dialogs.ChooseAsync(title, message, ["Entendido"]);
         return result.Added;
     }
+
+    // The status bar is easy to miss, so names the importer cannot read and empty imports get a window.
+    private static (string Title, string Message)? ImportProblem(ResourceImportResult result)
+    {
+        if (result.UnrecognizedNames.Count > 0)
+        {
+            var names = result.UnrecognizedNames.Select(Path.GetFileName).ToList();
+            var list = string.Join("\n", names.Take(5).Select(n => "• " + n)) + (names.Count > 5 ? $"\n• … y {names.Count - 5} más" : "");
+            var imported = result.Added.Count(d => !d.Reserved);
+            return ("Nombre de archivo no reconocido",
+                $"Estos modelos no se han importado porque su nombre no dice a qué hueco pertenecen:\n{list}\n\n"
+                + "El nombre tiene que seguir el formato del juego, <hueco>_<número de 3 cifras>_u.ydd, por ejemplo "
+                + "jbib_000_u.ydd (parte de arriba), lowr_000_u.ydd (pantalón), feet_000_u.ydd (calzado) o p_head_000.ydd (gorro). "
+                + "Sus texturas van al lado con el mismo número: jbib_diff_000_a_uni.ytd, jbib_diff_000_b_uni.ytd…\n\n"
+                + "Renombra los archivos e impórtalos otra vez."
+                + (imported > 0 ? $" El resto ({imported} prenda(s)) sí se ha importado." : ""));
+        }
+        if (result.Added.Any(d => !d.Reserved)) return null;
+        return ("No se ha importado ninguna prenda",
+            result.Warnings.Count == 0
+                ? "No se ha encontrado ningún modelo .ydd en lo que has elegido."
+                : string.Join("\n", result.Warnings.Take(5).Select(w => "• " + w)) + (result.Warnings.Count > 5 ? $"\n• … y {result.Warnings.Count - 5} avisos más" : ""));
+    }
+
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(10) };
+
+    // Set when a newer release exists, so the top bar can point at it.
+    [ObservableProperty]
+    public partial string UpdateLabel { get; private set; } = "Actualizar";
+
+    [ObservableProperty]
+    public partial bool UpdateAvailable { get; private set; }
+
+    // The window closes when the installer takes over.
+    public event Action? ExitRequested;
+
+    // At start: only changes the button when there is something new, never interrupts.
+    public async Task CheckForUpdatesQuietlyAsync()
+    {
+        try
+        {
+            ShowUpdate(await Updater.CheckAsync(Http, Updater.CurrentVersion));
+        }
+        catch (Exception ex) when (IsUpdateFailure(ex))
+        {
+            // No connection or GitHub unavailable: the button still lets the user try later.
+        }
+    }
+
+    [RelayCommand]
+    private async Task UpdateAsync()
+    {
+        var current = Updater.CurrentVersion;
+        Status = "Buscando una versión nueva…";
+        UpdateInfo? update;
+        try
+        {
+            update = await Updater.CheckAsync(Http, current);
+        }
+        catch (Exception ex) when (IsUpdateFailure(ex))
+        {
+            Status = $"No se pudo comprobar si hay una versión nueva: {ex.Message}";
+            return;
+        }
+        ShowUpdate(update);
+        if (update is null)
+        {
+            Status = $"EasyClothes {current} es la última versión.";
+            await dialogs.ChooseAsync("EasyClothes está al día", $"Tienes la última versión ({current}).", ["Entendido"]);
+            return;
+        }
+
+        var notes = update.Notes.Length == 0 ? "" : "\n\nNovedades:\n" + (update.Notes.Length > 800 ? update.Notes[..800] + "…" : update.Notes);
+        var message = $"Hay una versión nueva de EasyClothes: la {update.Version} (tienes la {current}). Se descargará, la app se cerrará, "
+            + "se instalará y se volverá a abrir sola. Tus proyectos no se tocan." + notes;
+        if (await dialogs.ChooseAsync("Versión nueva", message, [IsDirty ? "Guardar y actualizar" : "Actualizar ahora", "Más tarde"]) != 0)
+        {
+            Status = "";
+            return;
+        }
+        if (IsDirty)
+        {
+            await SaveAsync();
+            if (IsDirty) return;
+        }
+
+        IsBusy = true;
+        Status = $"Descargando EasyClothes {update.Version}…";
+        string installer;
+        try
+        {
+            installer = await Updater.DownloadAsync(Http, update, Path.Combine(Path.GetTempPath(), "EasyClothes-update"));
+        }
+        catch (Exception ex) when (IsUpdateFailure(ex) || ex is IOException or UnauthorizedAccessException)
+        {
+            Status = $"No se pudo descargar la actualización: {ex.Message}";
+            return;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+        if (!OperatingSystem.IsWindows())
+        {
+            Status = $"Instalador descargado en {installer}; ejecútalo en Windows.";
+            return;
+        }
+        // /RELAUNCH is ours: the installer script opens the app again when it finishes.
+        Process.Start(new ProcessStartInfo(installer, "/SILENT /CLOSEAPPLICATIONS /RELAUNCH") { UseShellExecute = true });
+        ExitRequested?.Invoke();
+    }
+
+    private void ShowUpdate(UpdateInfo? update)
+    {
+        UpdateAvailable = update is not null;
+        UpdateLabel = update is null ? "Actualizar" : $"Actualizar a {update.Version}";
+    }
+
+    private static bool IsUpdateFailure(Exception ex) =>
+        ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException or InvalidOperationException;
 
     [RelayCommand]
     private void MoveUp() => MoveSelected(-1);

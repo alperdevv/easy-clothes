@@ -52,3 +52,16 @@ Root: HKA; Subkey: "Software\Classes\EasyClothes.Project\shell\open\command"; Va
 
 [Run]
 Filename: "{app}\EasyClothes.App.exe"; Description: "{cm:LaunchProgram,EasyClothes}"; Flags: nowait postinstall skipifsilent
+; The app's update button runs the setup with /SILENT /RELAUNCH and closes; this opens it again.
+Filename: "{app}\EasyClothes.App.exe"; Flags: nowait; Check: Relaunch
+
+[Code]
+function Relaunch: Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  for i := 1 to ParamCount do
+    if CompareText(ParamStr(i), '/RELAUNCH') = 0 then
+      Result := True;
+end;

@@ -19,6 +19,7 @@ public partial class MainWindow : Window
         ViewModel = new MainWindowViewModel(new DialogService(this)) { Settings = AppSettings.Load(AppSettings.DefaultPath) };
         DataContext = ViewModel;
         ViewModel.PropertyChanged += OnViewModelChanged;
+        ViewModel.ExitRequested += Close;
         Viewport.RenderFailed += message => PreviewStatus.Text = message;
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);

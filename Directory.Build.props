@@ -9,7 +9,7 @@
 
   <!-- Shown in Properties > Details on Windows; unsigned programs without it look suspicious to antivirus heuristics. -->
   <PropertyGroup>
-    <Version>0.9.0</Version>
+    <Version>0.9.1</Version>
     <Product>EasyClothes</Product>
     <Authors>David</Authors>
     <Company>David</Company>

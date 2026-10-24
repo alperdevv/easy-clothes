@@ -16,7 +16,11 @@ public partial class App : Application
         {
             var window = new MainWindow();
             desktop.MainWindow = window;
-            window.Opened += (_, _) => ApplyCommandLine(window, desktop.Args ?? []);
+            window.Opened += (_, _) =>
+            {
+                ApplyCommandLine(window, desktop.Args ?? []);
+                _ = window.ViewModel.CheckForUpdatesQuietlyAsync();
+            };
         }
 
         base.OnFrameworkInitializationCompleted();
