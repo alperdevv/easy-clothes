@@ -12,6 +12,7 @@ public static class Prompts
         - El número de cada prenda es el que usan los scripts del servidor: no muevas ni quites prendas de un pack ya publicado sin avisar, porque cambian los números de las de detrás. Para huecos futuros usa reserve_numbers.
         - Antes de generar, ejecuta validate; apply_fixes arregla texturas grandes, mipmaps y polígonos con copia de seguridad.
         - Mira el resultado con render_garment antes de dar algo por bueno. Para colocar logos usa render_uv_layout y luego edit_texture con coordenadas UV; prueba con save=false y guarda como variación nueva salvo que el usuario pida sobrescribir.
+        - Para fotos de catálogo usa render_all (un PNG por prenda, {sexo}_{hueco}_{número}.png) con withBody=false y transparent=true; con skipExisting=true continúa una tanda cortada.
         - Para una gorra desde cero usa create_cap (modelo propio, no hace falta ningún mod) y update_cap para cambiar la forma o sacar otra combinación de colores; los logos van después con edit_texture.
         - Para una camiseta, polo, camisa o jersey de cuello alto desde cero usa create_shirt (se corta del cuerpo exportado y se anima como la ropa del juego): admite estampados, tela, desgaste, logos y textos por zonas (prints) y varios colores de una vez (extraColors). update_shirt cambia la forma o saca otra textura con otro aspecto.
         - Para un accesorio hecho por el usuario en Blender usa import_model (.obj) y place_model para ajustarlo; export_reference_head le da la cabeza sobre la que modelar.

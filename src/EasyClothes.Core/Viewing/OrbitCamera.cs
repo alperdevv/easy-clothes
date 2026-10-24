@@ -46,6 +46,47 @@ public sealed class OrbitCamera
         Distance = radius / MathF.Sin(FieldOfView / 2) * 1.1f;
     }
 
+    // Frames the points from the current yaw and pitch: centred on what the camera sees of them, with
+    // the given fraction of the image left free on every side. A few passes settle the perspective.
+    public void FitTo(IReadOnlyList<Vector3> points, float aspect, float margin)
+    {
+        if (points.Count == 0) return;
+        var (min, max) = (points[0], points[0]);
+        foreach (var p in points) (min, max) = (Vector3.Min(min, p), Vector3.Max(max, p));
+        Target = (min + max) / 2;
+        Distance = Math.Max(Vector3.Distance(min, max), 0.01f) * 2;
+        var tanY = MathF.Tan(FieldOfView / 2) * (1 - 2 * margin);
+        var tanX = tanY * aspect;
+
+        for (var pass = 0; pass < 3; pass++)
+        {
+            var toCamera = Vector3.Normalize(Position - Target);
+            var right = Vector3.Normalize(Vector3.Cross(-toCamera, Vector3.UnitZ));
+            var up = Vector3.Cross(right, -toCamera);
+
+            float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
+            foreach (var p in points)
+            {
+                var r = p - Target;
+                var depth = Distance - Vector3.Dot(r, toCamera);
+                var (x, y) = (Vector3.Dot(r, right) / depth, Vector3.Dot(r, up) / depth);
+                (minX, maxX, minY, maxY) = (MathF.Min(minX, x), MathF.Max(maxX, x), MathF.Min(minY, y), MathF.Max(maxY, y));
+            }
+            Target += (right * (minX + maxX) + up * (minY + maxY)) / 2 * Distance;
+
+            var needed = 0.01f;
+            foreach (var p in points)
+            {
+                var r = p - Target;
+                var towards = Vector3.Dot(r, toCamera);
+                needed = MathF.Max(needed, MathF.Max(MathF.Abs(Vector3.Dot(r, right)) / tanX, MathF.Abs(Vector3.Dot(r, up)) / tanY) + towards);
+            }
+            Distance = needed;
+        }
+        MinDistance = Distance * 0.1f;
+        MaxDistance = Distance * 20;
+    }
+
     public Matrix4x4 ViewMatrix => Matrix4x4.CreateLookAt(Position, Target, Vector3.UnitZ);
 
     public Matrix4x4 ProjectionMatrix(float aspect) =>

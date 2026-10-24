@@ -110,6 +110,33 @@ public sealed class McpServerTests : IDisposable
         Assert.Equal((400, 300), (png.Width, png.Height));
     }
 
+    [Fact]
+    public async Task Render_all_names_files_by_slot_and_number_and_lists_what_failed()
+    {
+        if (Environment.GetEnvironmentVariable("EASYCLOTHES_SAMPLES") is not { } samples) return;
+        var path = await SaveProject(new Drawable { Name = "rota", Gender = PedGender.Female, Component = ComponentSlot.Legs, ModelPath = "missing.ydd" });
+        var project = await ProjectFile.LoadAsync(path);
+        EasyClothes.Core.Importing.DrawableImporter.Import(project, _dir, [Path.Combine(samples, "stream", "mp_m_freemode_01_mp_m_eup^jbib_038_u.ydd")], PedGender.Male);
+        await ProjectFile.SaveAsync(project, path);
+        var tools = new PreviewTools(new Workspace(new ServerOptions([], null)));
+        var output = Path.Combine(_dir, "fotos");
+
+        var summary = await tools.RenderAll(_dir, output, transparent: true, size: 300);
+
+        Assert.Equal(["hombre_jbib_000.png"], Directory.GetFiles(output).Select(Path.GetFileName));
+        Assert.Contains("1 fallaron", summary);
+        Assert.Contains("mujer_lowr_000", summary);
+        var png = EasyClothes.Core.Textures.PngReader.Read(File.OpenRead(Path.Combine(output, "hombre_jbib_000.png")));
+        Assert.Equal((200, 300, 0), (png.Width, png.Height, png.Pixels[3]));
+
+        Assert.Contains("0 PNG guardados", await tools.RenderAll(_dir, output, filter: "hombre_*", skipExisting: true));
+        File.Delete(Path.Combine(output, "hombre_jbib_000.png"));
+        var side = await tools.RenderAll(_dir, output, filter: "hombre_*", viewsBySlot: new() { ["jbib"] = "left,right" }, size: 300);
+        Assert.Contains("1 PNG guardados", side);
+        Assert.Equal(400, EasyClothes.Core.Textures.PngReader.Read(File.OpenRead(Path.Combine(output, "hombre_jbib_000.png"))).Width);
+        await Assert.ThrowsAsync<ModelContextProtocol.McpException>(() => tools.RenderAll(_dir, output, viewsBySlot: new() { ["sombrero"] = "left" }));
+    }
+
     private static string Text(CallToolResult result) => string.Concat(result.Content.OfType<TextContentBlock>().Select(t => t.Text));
 
     private async Task<string> SaveProject(params Drawable[] drawables)
