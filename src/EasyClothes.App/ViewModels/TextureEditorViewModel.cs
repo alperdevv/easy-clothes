@@ -19,6 +19,7 @@ public enum EditorTool
     Brush,
     Eraser,
     Hand,
+    EraseMark,
 }
 
 public sealed partial class TextureEditorViewModel : ObservableObject, IDisposable
@@ -110,7 +111,7 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
     }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsMoveTool), nameof(IsBrushTool), nameof(IsEraserTool), nameof(IsHandTool), nameof(IsPaintTool))]
+    [NotifyPropertyChangedFor(nameof(IsMoveTool), nameof(IsBrushTool), nameof(IsEraserTool), nameof(IsHandTool), nameof(IsPaintTool), nameof(IsEraseMarkTool))]
     public partial EditorTool Tool { get; set; } = EditorTool.Brush;
 
     // Clicking the active tool again must not leave it looking unselected.
@@ -118,6 +119,7 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
     public bool IsBrushTool { get => Tool == EditorTool.Brush; set => SetTool(EditorTool.Brush, value); }
     public bool IsEraserTool { get => Tool == EditorTool.Eraser; set => SetTool(EditorTool.Eraser, value); }
     public bool IsHandTool { get => Tool == EditorTool.Hand; set => SetTool(EditorTool.Hand, value); }
+    public bool IsEraseMarkTool { get => Tool == EditorTool.EraseMark; set => SetTool(EditorTool.EraseMark, value); }
     public bool IsPaintTool => Tool is EditorTool.Brush or EditorTool.Eraser;
 
     private void SetTool(EditorTool tool, bool selected, [System.Runtime.CompilerServices.CallerMemberName] string? property = null)
@@ -375,6 +377,67 @@ public sealed partial class TextureEditorViewModel : ObservableObject, IDisposab
     }
 
     public void EndStroke() => Commit(Tool == EditorTool.Eraser ? "Borrador" : "Pincel");
+
+    // The last mark erased, so "Otra zona" can cover it again from the next best source.
+    private (PixelRect Hole, IReadOnlyList<PatchSource> Sources, int Index, Guid Layer, RgbaImage Image)? _lastErase;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(TryAnotherSourceCommand))]
+    public partial bool IsErasing { get; private set; }
+
+    // Covers the rectangle with the area of the visible texture that best continues its surroundings,
+    // as a new layer on top so it can be hidden, faded or undone like any other.
+    public async Task EraseMarkAsync(Vector2 fromUv, Vector2 toUv)
+    {
+        var (min, max) = (Vector2.Clamp(Vector2.Min(fromUv, toUv), Vector2.Zero, Vector2.One), Vector2.Clamp(Vector2.Max(fromUv, toUv), Vector2.Zero, Vector2.One));
+        var hole = new PixelRect((int)(min.X * Document.Width), (int)(min.Y * Document.Height),
+            (int)MathF.Ceiling((max.X - min.X) * Document.Width), (int)MathF.Ceiling((max.Y - min.Y) * Document.Height));
+        if (hole.Width < 2 || hole.Height < 2)
+        {
+            Status = "Arrastra un rectángulo que cubra la marca entera, con un poco de margen.";
+            return;
+        }
+
+        await WaitForComposeAsync();
+        var image = Composed;
+        IsErasing = true;
+        Status = "Buscando una zona de la prenda que encaje…";
+        var (sources, patch) = await Task.Run(() =>
+        {
+            var found = MarkEraser.FindSources(image, hole);
+            return (found, found.Count == 0 ? null : MarkEraser.Fill(image, hole, found[0]));
+        });
+        IsErasing = false;
+        if (patch is null)
+        {
+            Status = "No hay otra zona de la textura de ese tamaño; prueba con un rectángulo más pequeño.";
+            return;
+        }
+
+        var layer = new PixelLayer { Name = NextName("Marca borrada"), Image = patch };
+        Document.Layers.Add(layer);
+        RebuildLayers(layer.Id);
+        Commit("Borrar marca");
+        _lastErase = (hole, sources, 0, layer.Id, image);
+        TryAnotherSourceCommand.NotifyCanExecuteChanged();
+        Status = sources.Count > 1
+            ? "Marca tapada con otra zona de la prenda. Si no encaja, pulsa «Otra zona»."
+            : "Marca tapada con otra zona de la prenda.";
+    }
+
+    private bool CanTryAnotherSource => !IsErasing && _lastErase is { Sources.Count: > 1 } erase && Document.Find(erase.Layer) is PixelLayer;
+
+    [RelayCommand(CanExecute = nameof(CanTryAnotherSource))]
+    private void TryAnotherSource()
+    {
+        if (_lastErase is not { } erase || Document.Find(erase.Layer) is not PixelLayer layer) return;
+        var next = (erase.Index + 1) % erase.Sources.Count;
+        layer.Image = MarkEraser.Fill(erase.Image, erase.Hole, erase.Sources[next]);
+        _lastErase = erase with { Index = next };
+        RequestCompose();
+        Commit("Borrar marca: otra zona");
+        Status = $"Zona {next + 1} de {erase.Sources.Count}.";
+    }
 
     // A click on a placed image selects it; otherwise the selected layer is the one that moves.
     public bool BeginMove(Vector2 uv)

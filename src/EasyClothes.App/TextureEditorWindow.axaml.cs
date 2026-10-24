@@ -77,6 +77,9 @@ public partial class TextureEditorWindow : Window
             case Key.H when !ctrl:
                 Editor.Tool = EditorTool.Hand;
                 break;
+            case Key.S when !ctrl:
+                Editor.Tool = EditorTool.EraseMark;
+                break;
             case Key.OemOpenBrackets:
                 Editor.BrushSize = Math.Max(1, Editor.BrushSize / 1.2);
                 break;

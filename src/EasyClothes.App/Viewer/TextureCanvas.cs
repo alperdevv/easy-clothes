@@ -23,12 +23,13 @@ public sealed class TextureCanvas : Control
     private static readonly IPen BrushPen = new Pen(Brushes.White, 1);
     private static readonly IPen BrushShadowPen = new Pen(Brushes.Black, 1);
 
-    private enum Drag { None, Paint, Move, Pan }
+    private enum Drag { None, Paint, Move, Pan, Select }
 
     private WriteableBitmap? _bitmap;
     private TextureEditorViewModel? _editor;
     private Drag _drag;
     private Vector2 _lastUv;
+    private Vector2 _selectStart;
     private Point _lastPoint;
     private Point? _hover;
     private double _scale = 1;
@@ -148,7 +149,13 @@ public sealed class TextureCanvas : Control
                 context.DrawImage(_bitmap, rect);
             context.DrawRectangle(null, BorderPen, rect);
 
-            if (_editor.IsMoveTool && _editor.SelectedLayer?.Model is ImageLayer image) DrawImageOutline(context, rect, image);
+            if (_drag == Drag.Select)
+            {
+                var a = new Point(rect.X + _selectStart.X * rect.Width, rect.Y + _selectStart.Y * rect.Height);
+                var b = new Point(rect.X + _lastUv.X * rect.Width, rect.Y + _lastUv.Y * rect.Height);
+                context.DrawRectangle(null, SelectionPen, new Rect(a, b).Normalize());
+            }
+            else if (_editor.IsMoveTool && _editor.SelectedLayer?.Model is ImageLayer image) DrawImageOutline(context, rect, image);
             else if (_editor.IsPaintTool && _hover is { } hover && _drag != Drag.Pan && !SpaceHeld)
             {
                 var radius = Math.Max(1, _editor.BrushSize / 2 * _scale);
@@ -189,6 +196,11 @@ public sealed class TextureCanvas : Control
         }
         else if (_editor.IsMoveTool && _editor.BeginMove(uv))
             _drag = Drag.Move;
+        else if (_editor.IsEraseMarkTool && !_editor.IsErasing)
+        {
+            _drag = Drag.Select;
+            _selectStart = uv;
+        }
 
         if (_drag == Drag.None) return;
         _lastUv = uv;
@@ -232,6 +244,11 @@ public sealed class TextureCanvas : Control
         e.Pointer.Capture(null);
         if (drag == Drag.Paint) _editor?.EndStroke();
         else if (drag == Drag.Move) _editor?.EndMove();
+        else if (drag == Drag.Select && _editor is not null)
+        {
+            _ = _editor.EraseMarkAsync(_selectStart, ToUv(e.GetPosition(this)));
+            InvalidateVisual();
+        }
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)

@@ -150,6 +150,46 @@ public sealed class TextureEditorTests : IDisposable
         Assert.True(editor.ZoomPercent > before);
     }
 
+    [AvaloniaFact]
+    public async Task Dragging_over_a_logo_with_erase_mark_covers_it_with_the_garment()
+    {
+        var window = await OpenProjectWithTexture();
+        var editor = (await window.ViewModel.CreateTextureEditorAsync())!;
+        editor.AddImage(await WritePng("logo.png", Solid(4, 4, 0, 0, 255)));
+        // An 8 px logo in the middle, smaller than the rectangle dragged over it.
+        ((ImageLayer)editor.SelectedLayer!.Model).Scale = 0.125f;
+        editor.RequestCompose();
+        await editor.WaitForComposeAsync();
+        var editorWindow = new TextureEditorWindow(editor) { Width = 1500, Height = 900 };
+        editorWindow.Show();
+        Dispatcher.UIThread.RunJobs();
+        var canvas = editorWindow.FindControl<TextureCanvas>("Canvas")!;
+        var centre = canvas.TranslatePoint(new Point(canvas.Bounds.Width / 2, canvas.Bounds.Height / 2), editorWindow)!.Value;
+        var side = 64 * canvas.Scale;
+
+        editorWindow.KeyPressQwerty(PhysicalKey.S, RawInputModifiers.None);
+        editorWindow.MouseDown(centre - new Point(side / 10, side / 10), MouseButton.Left);
+        editorWindow.MouseMove(centre + new Point(side / 10, side / 10));
+        editorWindow.MouseUp(centre + new Point(side / 10, side / 10), MouseButton.Left);
+        for (var i = 0; i < 200 && editor.HistoryItems[^1].Label != "Borrar marca"; i++)
+        {
+            await Task.Delay(10);
+            Dispatcher.UIThread.RunJobs();
+        }
+        await editor.WaitForComposeAsync();
+
+        Assert.Equal(EditorTool.EraseMark, editor.Tool);
+        Assert.Equal("Borrar marca", editor.HistoryItems[^1].Label);
+        Assert.Equal("Marca borrada 1", editor.SelectedLayer!.Name);
+        var o = (32 * 64 + 32) * 4;
+        Assert.InRange(editor.Composed.Pixels[o], 180, 220);
+        Assert.InRange(editor.Composed.Pixels[o + 2], 20, 60);
+
+        Assert.True(editor.TryAnotherSourceCommand.CanExecute(null));
+        editor.TryAnotherSourceCommand.Execute(null);
+        Assert.Equal("Borrar marca: otra zona", editor.HistoryItems[^1].Label);
+    }
+
     private async Task<string> WritePng(string name, RgbaImage image)
     {
         var path = Path.Combine(_dir, name);

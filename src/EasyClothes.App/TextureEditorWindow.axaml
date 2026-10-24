@@ -63,6 +63,9 @@
               <ToggleButton Classes="flat" IsChecked="{Binding IsEraserTool}" ToolTip.Tip="Borrar en la capa seleccionada (E)">
                 <ui:IconLabel Icon="{StaticResource Icon.Eraser}" Text="Borrador" />
               </ToggleButton>
+              <ToggleButton Classes="flat" IsChecked="{Binding IsEraseMarkTool}" ToolTip.Tip="Tapar un logo o una marca con otra zona de la misma prenda (S)">
+                <ui:IconLabel Icon="{StaticResource Icon.Stamp}" Text="Borrar marca" />
+              </ToggleButton>
               <ToggleButton Classes="flat" IsChecked="{Binding IsHandTool}" ToolTip.Tip="Desplazar la vista (H, o mantén Espacio)">
                 <ui:IconLabel Icon="{StaticResource Icon.Hand}" Text="Mano" />
               </ToggleButton>
@@ -104,6 +107,14 @@
         <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsMoveTool}" Margin="0,7">
           <ui:Icon Classes="muted" Size="14" Data="{StaticResource Icon.Info}" />
           <TextBlock Classes="muted" Text="Arrastra para mover la capa seleccionada; clic sobre una imagen la selecciona. Ctrl+rueda cambia su tamaño." />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsEraseMarkTool}">
+          <ui:Icon Classes="muted" Size="14" Data="{StaticResource Icon.Info}" VerticalAlignment="Center" />
+          <TextBlock Classes="muted" VerticalAlignment="Center"
+                     Text="Arrastra un rectángulo sobre la marca, con algo de margen: se tapa con la zona de la prenda que mejor encaja, en una capa nueva." />
+          <Button Classes="flat" Command="{Binding TryAnotherSourceCommand}" ToolTip.Tip="Tapar la última marca con la siguiente zona que mejor encaja">
+            <ui:IconLabel Icon="{StaticResource Icon.RotateCcw}" Text="Otra zona" />
+          </Button>
         </StackPanel>
         <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsHandTool}" Margin="0,7">
           <ui:Icon Classes="muted" Size="14" Data="{StaticResource Icon.Info}" />
