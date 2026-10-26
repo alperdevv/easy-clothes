@@ -1,5 +1,7 @@
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Projects;
+using EasyClothes.Core.Rage;
+using EasyClothes.Core.Textures;
 using EasyClothes.Mcp.Tools;
 using ModelContextProtocol;
 
@@ -72,5 +74,24 @@ public sealed class EditToolsTests : IDisposable
         Assert.Contains("Hueco desconocido", (await Assert.ThrowsAsync<McpException>(() => _edit.UpdateGarment(project, "jbib_000", slot: "camiseta"))).Message);
         Assert.Contains("no tiene texturas", (await Assert.ThrowsAsync<McpException>(() => _edit.BuildResource(project))).Message);
         Assert.Contains("Ya hay un proyecto", (await Assert.ThrowsAsync<McpException>(() => _edit.CreateProject(project, "Otro"))).Message);
+    }
+
+    [Fact]
+    public async Task Optimize_folder_lists_first_and_then_fixes_a_resource_without_project()
+    {
+        var stream = Directory.CreateDirectory(Path.Combine(_root, "gz", "stream")).FullName;
+        var ytd = Path.Combine(stream, "jbib_diff_000_a_uni.ytd");
+        TextureDictionaryWriter.Create([("a", TextureEncoder.Encode(new RgbaImage(12, 8, Enumerable.Repeat((byte)128, 12 * 8 * 4).ToArray()), TextureFormat.Dxt5))]).Write(ytd);
+        var backup = Path.Combine(_root, "copia");
+
+        var plan = await _edit.OptimizeFolder(Path.Combine(_root, "gz"), dryRun: true, backup: backup);
+        Assert.Equal((1, 1, (long?)null), (plan.Scanned, plan.Changed, plan.MemoryAfterKiB));
+        Assert.False(Directory.Exists(backup));
+
+        var done = await _edit.OptimizeFolder(Path.Combine(_root, "gz"), backup: backup);
+        Assert.Equal(backup, done.Backup);
+        Assert.Contains("12x8", Assert.Single(done.Changes));
+        Assert.True(File.Exists(Path.Combine(backup, "stream", "jbib_diff_000_a_uni.ytd")));
+        await Assert.ThrowsAsync<McpException>(() => _edit.OptimizeFolder(Path.Combine(_root, "gz"), backup: Path.Combine(stream, "copia")));
     }
 }

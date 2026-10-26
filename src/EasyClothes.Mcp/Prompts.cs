@@ -10,7 +10,8 @@ public static class Prompts
         EasyClothes gestiona packs de ropa de GTA V para FiveM. Cada proyecto es un .ecproj con sus archivos en assets/.
         - Empieza con find_projects o get_project para conocer las prendas, su sexo, hueco (jbib, lowr, feet, p_head…) y número en el juego.
         - El número de cada prenda es el que usan los scripts del servidor: no muevas ni quites prendas de un pack ya publicado sin avisar, porque cambian los números de las de detrás. Para huecos futuros usa reserve_numbers.
-        - Antes de generar, ejecuta validate; apply_fixes arregla texturas grandes, mipmaps y polígonos con copia de seguridad.
+        - Antes de generar, ejecuta validate; apply_fixes arregla texturas grandes, sin comprimir, mipmaps y polígonos con copia de seguridad.
+        - Para un recurso ya generado sin proyecto, optimize_folder hace lo mismo con sus texturas; pruébalo antes con dryRun=true.
         - Mira el resultado con render_garment antes de dar algo por bueno. Para colocar logos usa render_uv_layout y luego edit_texture con coordenadas UV; prueba con save=false y guarda como variación nueva salvo que el usuario pida sobrescribir.
         - Para fotos de catálogo usa render_all (un PNG por prenda, {sexo}_{hueco}_{número}.png) con withBody=false y transparent=true; con skipExisting=true continúa una tanda cortada.
         - Para una gorra desde cero usa create_cap (modelo propio, no hace falta ningún mod) y update_cap para cambiar la forma o sacar otra combinación de colores; los logos van después con edit_texture.

@@ -20,6 +20,7 @@ public static class ProjectPackage
             {
                 var relative = Path.GetRelativePath(dir, file).Replace('\\', '/');
                 if (relative.StartsWith(ProjectFile.BackupsFolder + "/") || relative.EndsWith(".tmp")) continue;
+                if (InNestedProject(dir, file)) continue;
                 if (Path.GetFullPath(file) == Path.GetFullPath(packagePath)) continue;
                 zip.CreateEntryFromFile(file, relative, CompressionLevel.Optimal);
                 count++;
@@ -27,6 +28,14 @@ public static class ProjectPackage
         }
         File.Move(tmp, packagePath, overwrite: true);
         return count;
+    }
+
+    // Another project created in a subfolder is packed on its own, not inside this one.
+    private static bool InNestedProject(string root, string file)
+    {
+        for (var d = Path.GetDirectoryName(file); d is not null && d.Length > root.Length; d = Path.GetDirectoryName(d))
+            if (ProjectFolder.HasProject(d)) return true;
+        return false;
     }
 
     // Returns the path of the extracted project file.

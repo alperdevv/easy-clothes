@@ -1,6 +1,7 @@
 using EasyClothes.Core.Analysis;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Rage;
+using EasyClothes.Core.Textures;
 
 namespace EasyClothes.Core.Validation;
 
@@ -132,28 +133,61 @@ public static class ProjectValidator
             return;
         }
 
-        CheckOversized(issues, d, relative, report.SystemSize, report.GraphicsSize);
+        issues.AddRange(TextureIssues(report, relative, limits, d.Name, d.Id));
+    }
+
+    // Shared with FolderOptimizer, which applies the same fixes to resources that have no project.
+    public static IEnumerable<ValidationIssue> TextureIssues(TextureReport report, string relative, AnalysisLimits limits, string owner, Guid? drawableId = null)
+    {
         var name = ShortName(relative);
+        var largest = Math.Max(report.SystemSize, report.GraphicsSize);
+        if (largest > AnalysisLimits.FiveMOversizedBytes)
+        {
+            FixAction? fix = null;
+            if (report.Textures.Count > 0)
+            {
+                var side = SideThatFits(report.Textures, limits.MaxTextureSide);
+                fix = side < report.Textures.Max(t => Math.Max(t.Width, t.Height)) ? new ResizeTextureFix(relative, side) : new CompressTextureFix(relative, side);
+            }
+            yield return new(IssueSeverity.Error, OversizedMessage(owner, name, largest), drawableId, fix);
+        }
         foreach (var t in report.Textures)
         {
             var side = Math.Max(t.Width, t.Height);
             if (side > limits.MaxTextureSide)
-                issues.Add(new(IssueSeverity.Warning, $"{d.Name}: {name} mide {t.Width}x{t.Height} (recomendado ≤ {limits.MaxTextureSide}).", d.Id,
-                    new ResizeTextureFix(relative, limits.MaxTextureSide)));
+                yield return new(IssueSeverity.Warning, $"{owner}: {name} mide {t.Width}x{t.Height} (recomendado ≤ {limits.MaxTextureSide}).", drawableId,
+                    new ResizeTextureFix(relative, limits.MaxTextureSide));
             if (!int.IsPow2(t.Width) || !int.IsPow2(t.Height))
-                issues.Add(new(IssueSeverity.Warning, $"{d.Name}: {name} mide {t.Width}x{t.Height}, que no es potencia de dos.", d.Id,
-                    new ResizeTextureFix(relative, Math.Clamp(RoundDownPow2(side), 4, limits.MaxTextureSide))));
+                yield return new(IssueSeverity.Warning, $"{owner}: {name} mide {t.Width}x{t.Height}, que no es potencia de dos.", drawableId,
+                    new ResizeTextureFix(relative, Math.Clamp(RoundDownPow2(side), 4, limits.MaxTextureSide)));
             if (t.MipLevels <= 1 && side > 64)
-                issues.Add(new(IssueSeverity.Warning, $"{d.Name}: {name} no tiene mipmaps (parpadeo a distancia y más memoria de vídeo).", d.Id,
-                    new RegenerateMipsFix(relative)));
+                yield return new(IssueSeverity.Warning, $"{owner}: {name} no tiene mipmaps (parpadeo a distancia y más memoria de vídeo).", drawableId,
+                    new RegenerateMipsFix(relative));
+            if (t.PixelFormat is TextureFormat.A8R8G8B8 or TextureFormat.X8R8G8B8 or TextureFormat.A8B8G8R8 && side > 256)
+                yield return new(IssueSeverity.Warning, $"{owner}: {name} está sin comprimir ({t.Format}); en DXT ocupa de 4 a 8 veces menos memoria.", drawableId,
+                    new CompressTextureFix(relative, Math.Clamp(RoundDownPow2(side), 4, limits.MaxTextureSide)));
         }
     }
+
+    // Largest power-of-two side whose DXT5 textures with mips stay under the FiveM limit, with room for the header.
+    internal static int SideThatFits(IReadOnlyList<TextureInfo> textures, int maxSide)
+    {
+        var side = Math.Clamp(RoundDownPow2(textures.Max(t => Math.Max(t.Width, t.Height))), 4, maxSide);
+        while (side > 4 && textures.Sum(t => DxtBytes(TextureOptimizer.TargetSize(t.Width, t.Height, side))) > AnalysisLimits.FiveMOversizedBytes - 64 * 1024)
+            side /= 2;
+        return side;
+    }
+
+    private static long DxtBytes((int Width, int Height) size) => (long)size.Width * size.Height * 4 / 3;
+
+    private static string OversizedMessage(string owner, string name, int bytes) =>
+        $"{owner}: {name} ocupa {bytes / 1048576.0:N1} MiB en memoria; FiveM avisa a partir de 16 MiB y puede no cargarlo.";
 
     private static void CheckOversized(List<ValidationIssue> issues, Drawable d, string relative, int systemSize, int graphicsSize)
     {
         var largest = Math.Max(systemSize, graphicsSize);
         if (largest > AnalysisLimits.FiveMOversizedBytes)
-            issues.Add(new(IssueSeverity.Error, $"{d.Name}: {ShortName(relative)} ocupa {largest / 1048576.0:N1} MiB en memoria; FiveM avisa a partir de 16 MiB y puede no cargarlo.", d.Id));
+            issues.Add(new(IssueSeverity.Error, OversizedMessage(d.Name, ShortName(relative), largest), d.Id));
     }
 
     private static string ShortName(string path)

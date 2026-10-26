@@ -31,6 +31,21 @@ public sealed class ProjectPackageTests : IDisposable
     }
 
     [Fact]
+    public async Task Package_leaves_out_another_project_living_in_a_subfolder()
+    {
+        var source = Directory.CreateDirectory(Path.Combine(_dir, "src")).FullName;
+        var projectPath = Path.Combine(source, "ropa.ecproj");
+        await ProjectFile.SaveAsync(new ClothingProject { Name = "Ropa", CollectionName = "ropa" }, projectPath);
+        var nested = Directory.CreateDirectory(Path.Combine(source, "Verano", "assets")).FullName;
+        await ProjectFile.SaveAsync(new ClothingProject { Name = "Verano", CollectionName = "verano" }, Path.Combine(source, "Verano", "verano.ecproj"));
+        File.WriteAllText(Path.Combine(nested, "b.ydd"), "");
+        var package = Path.Combine(_dir, "ropa" + ProjectPackage.Extension);
+
+        Assert.Equal(1, ProjectPackage.Export(projectPath, package));
+        Assert.True(ProjectFolder.HasProject(ProjectFolder.SubfolderFor(Path.Combine(source, "Verano.ecproj"))));
+    }
+
+    [Fact]
     public void Draft_moves_to_the_chosen_folder_but_never_over_existing_files()
     {
         var draft = ProjectDraft.Create(Path.Combine(_dir, "drafts"));

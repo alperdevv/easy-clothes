@@ -9,6 +9,9 @@ public sealed class AppSettings
     public string? BaseBodyFolder { get; set; }
     public bool ShowBody { get; set; } = true;
 
+    // Project file → folder where its FiveM resource was last generated, so saving keeps it up to date.
+    public Dictionary<string, string> ResourceFolders { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     public static string DefaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EasyClothes", "settings.json");
 

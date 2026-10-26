@@ -80,6 +80,7 @@ public sealed class MainWindowTests : IDisposable
         });
         var window = new MainWindow();
         window.Show();
+        window.ViewModel.SettingsPath = Path.Combine(_dir, "settings.json");
         await window.ViewModel.OpenProjectFileAsync(path);
         var output = Path.Combine(_dir, "resource");
 
@@ -92,6 +93,32 @@ public sealed class MainWindowTests : IDisposable
         await window.ViewModel.BuildResourceAsync(output);
         Assert.StartsWith("Recurso generado", window.ViewModel.Status);
         Assert.True(File.Exists(Path.Combine(output, "stream", "mp_m_freemode_01_ui.ymt")));
+    }
+
+    [AvaloniaFact]
+    public async Task Saving_rebuilds_the_resource_with_the_overwritten_texture()
+    {
+        File.WriteAllText(Path.Combine(_dir, "a.ydd"), "");
+        File.WriteAllText(Path.Combine(_dir, "a.ytd"), "antes");
+        var path = await SaveProject(new ClothingProject
+        {
+            Name = "UI",
+            CollectionName = "ui",
+            Drawables = [new Drawable { Name = "lowr_000", Component = ComponentSlot.Legs, ModelPath = "a.ydd", Textures = [new TextureVariation { TexturePath = "a.ytd" }] }],
+        });
+        var window = new MainWindow();
+        window.Show();
+        window.ViewModel.SettingsPath = Path.Combine(_dir, "settings.json");
+        await window.ViewModel.OpenProjectFileAsync(path);
+        var output = Path.Combine(_dir, "resource");
+        await window.ViewModel.BuildResourceAsync(output);
+
+        File.WriteAllText(Path.Combine(_dir, "a.ytd"), "después");
+        await window.ViewModel.SaveCommand.ExecuteAsync(null);
+
+        Assert.StartsWith("Proyecto guardado y recurso actualizado", window.ViewModel.Status);
+        Assert.Equal("después", File.ReadAllText(Directory.GetFiles(Path.Combine(output, "stream"), "*.ytd", SearchOption.AllDirectories).Single()));
+        Assert.Equal(output, AppSettings.Load(window.ViewModel.SettingsPath).ResourceFolders[path]);
     }
 
     [AvaloniaFact]
@@ -174,6 +201,21 @@ public sealed class MainWindowTests : IDisposable
         Assert.True(File.Exists(Path.Combine(_dir, "Mi Ropa", "mi_ropa.ecproj")));
         Assert.Empty(Directory.GetFileSystemEntries(Path.Combine(_dir, "drafts")));
         Assert.DoesNotContain(window.ViewModel.Issues, i => i.Message.Contains("falta"));
+    }
+
+    [AvaloniaFact]
+    public async Task A_project_created_in_a_subfolder_leaves_the_parent_project_alone()
+    {
+        var parent = await SaveProject(new ClothingProject { Name = "Ropa", CollectionName = "ropa" });
+        var before = File.ReadAllText(parent);
+        var window = new MainWindow();
+        window.Show();
+
+        await window.ViewModel.CreateProjectAsync(Path.Combine(_dir, "Verano"));
+
+        Assert.Equal(before, File.ReadAllText(parent));
+        Assert.True(File.Exists(Path.Combine(_dir, "Verano", "verano.ecproj")));
+        Assert.Equal("verano", window.ViewModel.CollectionName);
     }
 
     [AvaloniaFact]

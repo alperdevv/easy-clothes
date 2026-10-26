@@ -11,6 +11,9 @@ public abstract record FixAction(string Label);
 
 public sealed record ResizeTextureFix(string TexturePath, int MaxSide) : FixAction($"Reducir a {MaxSide}px");
 
+// Recompresses to DXT1/DXT5, shrinking only what is bigger than MaxSide.
+public sealed record CompressTextureFix(string TexturePath, int MaxSide) : FixAction("Comprimir a DXT");
+
 public sealed record RegenerateMipsFix(string TexturePath) : FixAction("Generar mipmaps");
 
 public sealed record ReduceMeshFix(string ModelPath, int TargetTriangles) : FixAction($"Reducir a {TargetTriangles:N0} triángulos");

@@ -59,6 +59,10 @@
           <Button Classes="flat" Command="{Binding ConnectClaudeCommand}" ToolTip.Tip="Deja que Claude (Desktop o Code) trabaje en tus proyectos con EasyClothes">
             <ui:IconLabel Icon="{StaticResource Icon.Plug}" Text="Conectar con Claude" />
           </Button>
+          <Button Classes="flat" Command="{Binding OptimizeFolderCommand}"
+                  ToolTip.Tip="Comprimir y reducir las texturas de un recurso ya generado para que no pasen de 16 MiB de memoria en FiveM. Antes de tocar nada te dice qué va a cambiar">
+            <ui:IconLabel Icon="{StaticResource Icon.Gem}" Text="Optimizar recurso" />
+          </Button>
           <Button Classes="accent" Command="{Binding BuildResourceCommand}" ToolTip.Tip="Crear la carpeta del recurso de FiveM (Ctrl+B)">
             <ui:IconLabel Icon="{StaticResource Icon.Hammer}" Text="Generar recurso" />
           </Button>

@@ -87,11 +87,12 @@ public sealed class DialogService(TopLevel topLevel) : IDialogService
         if (topLevel is Window owner) await window.ShowDialog(owner);
     }
 
-    public async Task<string?> PickSaveFileAsync(string title, string suggestedName, string description, string extension)
+    public async Task<string?> PickSaveFileAsync(string title, string suggestedName, string description, string extension, string? startDir = null)
     {
         var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = title,
+            SuggestedStartLocation = startDir is null ? null : await topLevel.StorageProvider.TryGetFolderFromPathAsync(startDir),
             SuggestedFileName = suggestedName,
             DefaultExtension = extension,
             FileTypeChoices = [new FilePickerFileType(description) { Patterns = ["*" + extension] }],

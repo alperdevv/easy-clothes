@@ -15,6 +15,9 @@ public sealed record SlotOrder(string Gender, string Slot, IReadOnlyList<string>
 
 public sealed record FixReport(IReadOnlyList<string> Applied, int RemainingErrors, int RemainingWarnings);
 
+public sealed record FolderOptimizeReport(int Scanned, int Changed, long MemoryBeforeKiB, long? MemoryAfterKiB, IReadOnlyList<string> Changes,
+    IReadOnlyList<string> Failed, IReadOnlyList<string> OversizedModels, string? Backup);
+
 public sealed record BuildReport(string Output, int Garments, int Tattoos, int Files, IReadOnlyList<string> Warnings, string Install);
 
 // Every change saves the project at once (the previous version goes to .backups/project) and the app reloads it.
@@ -236,7 +239,7 @@ public sealed class EditTools(Workspace workspace)
     }
 
     [McpServerTool(Name = "apply_fixes", Destructive = true, OpenWorld = false)]
-    [Description("Aplica las correcciones automáticas que propone validate (reducir texturas, generar mipmaps, reducir polígonos), de todo el proyecto o de una prenda. Cada archivo original se copia antes a .backups.")]
+    [Description("Aplica las correcciones automáticas que propone validate (comprimir o reducir texturas, generar mipmaps, reducir polígonos), de todo el proyecto o de una prenda. Cada archivo original se copia antes a .backups.")]
     public async Task<FixReport> ApplyFixes(
         [Description(ProjectParam)] string project,
         [Description("Opcional: solo esta prenda (id o nombre).")] string? garment = null,
@@ -261,6 +264,33 @@ public sealed class EditTools(Workspace workspace)
         }
         var remaining = ProjectValidator.Validate(loaded.Project, loaded.Dir, workspace.Cache);
         return new FixReport(applied, remaining.Count(i => i.Severity == IssueSeverity.Error), remaining.Count(i => i.Severity == IssueSeverity.Warning));
+    }
+
+    [McpServerTool(Name = "optimize_folder", Destructive = true, OpenWorld = false)]
+    [Description("Aplica las correcciones de texturas de validate (comprimir a DXT, reducir, mipmaps y bajar de 16 MiB de memoria) a todos los .ytd de una carpeta, por ejemplo un recurso ya generado que no tiene proyecto. Los originales se copian a una carpeta de copia fuera del recurso. Los .ydd de más de 16 MiB solo se listan.")]
+    public async Task<FolderOptimizeReport> OptimizeFolder(
+        [Description("Carpeta a optimizar (se busca en subcarpetas).")] string folder,
+        [Description("true solo dice qué cambiaría, sin tocar nada.")] bool dryRun = false,
+        [Description("Carpeta para los originales, fuera de la que se optimiza. Por defecto, backups de EasyClothes en los datos locales del usuario.")] string? backup = null,
+        CancellationToken ct = default)
+    {
+        var dir = workspace.Resolve(folder);
+        if (!Directory.Exists(dir)) throw new McpException($"No existe la carpeta {folder}.");
+        var backupDir = backup is null ? FolderOptimizer.DefaultBackupDir(dir) : workspace.Resolve(backup);
+        FolderOptimization result;
+        try
+        {
+            result = await Task.Run(() => FolderOptimizer.Optimize(dir, backupDir, dryRun, ct: ct), ct);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new McpException(ex.Message);
+        }
+        const int listed = 50;
+        var changes = result.Changes.Take(listed).Select(c => $"{c.File}: {c.Result ?? c.Fix}").ToList();
+        if (result.Changes.Count > listed) changes.Add($"… y {result.Changes.Count - listed} más.");
+        return new FolderOptimizeReport(result.Scanned, result.Changes.Count, result.Changes.Sum(c => (long)c.OldGraphicsSize) / 1024,
+            dryRun ? null : result.Changes.Sum(c => (long)(c.NewGraphicsSize ?? 0)) / 1024, changes, result.Failed, result.OversizedModels, result.BackupDir);
     }
 
     [McpServerTool(Name = "build_resource", Destructive = true, Idempotent = true, OpenWorld = false)]

@@ -21,6 +21,7 @@ return args switch
     ["inspect", var path] => Inspect(path),
     ["stats", var dir] => Stats(dir),
     ["optimize-texture", var path, var maxSide] => OptimizeTexture(path, int.Parse(maxSide)),
+    ["optimize-folder", var dir, .. var options] => OptimizeFolder(dir, options),
     ["reduce-mesh", var path, var triangles] => ReduceMesh(path, int.Parse(triangles)),
     ["export-png", var path, var outDir] => ExportPng(path, outDir),
     ["export-obj", var path, var outDir] => ExportObj(path, outDir),
@@ -42,6 +43,9 @@ static int Usage()
           easyclothes inspect <file.ydd|file.ytd>      Show resource header and list textures or drawables
           easyclothes render <out.png> <yaw-deg> <file.ydd[=file.ytd]>...  Render models together to a PNG
           easyclothes optimize-texture <file.ytd> <max-side>  Resize, regenerate mips and recompress in place
+          easyclothes optimize-folder <dir> [--dry-run] [--backup <dir>]
+                                                       Apply the texture fixes to every .ytd of a folder (e.g. a built
+                                                       resource); originals go to the backup folder
           easyclothes reduce-mesh <file.ydd> <triangles>      Simplify the high LOD in place
           easyclothes export-png <file.ytd> <out-dir>  Decode every texture to PNG
           easyclothes export-obj <file.ydd> <out-dir>  Export each drawable's high LOD as Wavefront OBJ
@@ -248,6 +252,28 @@ static int OptimizeTexture(string path, int maxSide)
         Console.WriteLine($"{c.Name}: {c.OldWidth}x{c.OldHeight} {c.OldFormat} -> {c.NewWidth}x{c.NewHeight} {c.NewFormat}, {c.Mips} mips");
     Console.WriteLine($"File {result.OldFileSize:N0} -> {result.NewFileSize:N0} bytes, graphics memory {result.OldGraphicsSize / 1024:N0} -> {result.NewGraphicsSize / 1024:N0} KiB");
     return 0;
+}
+
+static int OptimizeFolder(string dir, string[] options)
+{
+    var dryRun = options.Contains("--dry-run");
+    var backupIndex = Array.IndexOf(options, "--backup");
+    var backup = backupIndex >= 0 && backupIndex + 1 < options.Length ? options[backupIndex + 1] : FolderOptimizer.DefaultBackupDir(dir);
+    var result = FolderOptimizer.Optimize(dir, backup, dryRun, progress: new Progress<(int Done, int Total)>(p =>
+    {
+        if (p.Done % 500 == 0 || p.Done == p.Total) Console.Error.WriteLine($"{p.Done}/{p.Total}");
+    }));
+
+    foreach (var c in result.Changes)
+        Console.WriteLine(dryRun ? $"{c.File}: {c.Fix} ({c.OldGraphicsSize / 1024:N0} KiB)" : $"{c.File}: {c.Result}");
+    foreach (var f in result.Failed) Console.WriteLine($"ERROR {f}");
+    foreach (var m in result.OversizedModels) Console.WriteLine($"MODEL > 16 MiB (not changed) {m}");
+    var before = result.Changes.Sum(c => (long)c.OldGraphicsSize);
+    var after = result.Changes.Sum(c => (long)(c.NewGraphicsSize ?? 0));
+    Console.WriteLine(dryRun
+        ? $"{result.Changes.Count} of {result.Scanned} files would change ({before / 1048576:N0} MiB now)."
+        : $"{result.Changes.Count} of {result.Scanned} files changed, graphics memory {before / 1048576:N0} -> {after / 1048576:N0} MiB. Backup: {result.BackupDir ?? "none"}");
+    return result.Failed.Count > 0 ? 1 : 0;
 }
 
 static int ReduceMesh(string path, int triangles)

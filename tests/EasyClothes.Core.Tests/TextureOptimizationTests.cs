@@ -87,4 +87,83 @@ public sealed class TextureOptimizationTests : IDisposable
         Assert.DoesNotContain(ProjectValidator.Validate(project, _dir, cache, limits), i => i.Fix is not null);
         Assert.Single(Directory.EnumerateFiles(Path.Combine(_dir, EasyClothes.Core.Projects.ProjectFile.BackupsFolder), "hat.ytd", SearchOption.AllDirectories));
     }
+
+    [Fact]
+    public void Uncompressed_texture_gets_a_compress_fix_that_keeps_its_size()
+    {
+        var project = SingleHat();
+        TestResources.WriteTextureDictionary(Path.Combine(_dir, "hat.ytd"), "hat", 512, 512, TextureFormat.A8R8G8B8, TestResources.SolidArgb(512, 512, 40, 90, 160, 255), levels: 1);
+        var cache = new AnalysisCache();
+
+        var fixes = IssueFixer.OnePerFile(ProjectValidator.Validate(project, _dir, cache).Select(i => i.Fix).OfType<FixAction>());
+
+        Assert.Equal(new CompressTextureFix("hat.ytd", 512), Assert.Single(fixes));
+        IssueFixer.Apply(fixes[0], _dir);
+        var info = Assert.Single(TextureDictionary.Read(ResourceFile.Read(Path.Combine(_dir, "hat.ytd"))));
+        Assert.Equal((512, 512, TextureFormat.Dxt1), (info.Width, info.Height, info.PixelFormat));
+        Assert.DoesNotContain(ProjectValidator.Validate(project, _dir, new AnalysisCache()), i => i.Fix is not null);
+    }
+
+    [Fact]
+    public void Texture_over_the_fivem_limit_has_a_fix_that_brings_it_under()
+    {
+        var project = SingleHat();
+        var path = Path.Combine(_dir, "hat.ytd");
+        TestResources.WriteTextureDictionary(path, "hat", 2048, 4096, TextureFormat.A8R8G8B8, new byte[2048 * 4096 * 4]);
+
+        var oversized = Assert.Single(ProjectValidator.Validate(project, _dir, new AnalysisCache()), i => i.Message.Contains("MiB en memoria"));
+
+        Assert.NotNull(oversized.Fix);
+        IssueFixer.Apply(oversized.Fix, _dir);
+        Assert.InRange(ResourceFile.Read(path).Header.GraphicsSize, 1, AnalysisLimits.FiveMOversizedBytes);
+    }
+
+    [Theory]
+    [InlineData(8192, 1, 8192, 2048)]
+    [InlineData(2048, 3, 2048, 1024)]
+    [InlineData(1024, 1, 2048, 1024)]
+    public void Side_that_fits_halves_until_the_dxt_textures_fit(int side, int count, int maxSide, int expected)
+    {
+        var textures = Enumerable.Range(0, count).Select(i => new TextureInfo($"t{i}", side, side, "A8R8G8B8", 1)).ToList();
+
+        Assert.Equal(expected, ProjectValidator.SideThatFits(textures, maxSide));
+    }
+
+    [Fact]
+    public void Folder_optimizer_fixes_every_texture_and_keeps_the_originals_outside()
+    {
+        var resource = Directory.CreateDirectory(Path.Combine(_dir, "res")).FullName;
+        Directory.CreateDirectory(Path.Combine(resource, "stream"));
+        Directory.CreateDirectory(Path.Combine(resource, ".backups"));
+        var heavy = Path.Combine(resource, "stream", "a.ytd");
+        TestResources.WriteTextureDictionary(heavy, "a", 512, 512, TextureFormat.A8R8G8B8, TestResources.SolidArgb(512, 512, 200, 30, 30, 255));
+        TestResources.WriteTextureDictionary(Path.Combine(resource, "stream", "b.ytd"), "b", 64, 64, TextureFormat.Dxt1, new byte[64 * 64 / 2]);
+        TestResources.WriteTextureDictionary(Path.Combine(resource, ".backups", "c.ytd"), "c", 512, 512, TextureFormat.A8R8G8B8, new byte[512 * 512 * 4]);
+        var original = File.ReadAllBytes(heavy);
+        var backup = Path.Combine(_dir, "backup");
+
+        var planned = FolderOptimizer.Optimize(resource, backup, dryRun: true);
+
+        Assert.Equal((2, Path.Combine("stream", "a.ytd")), (planned.Scanned, Assert.Single(planned.Changes).File));
+        Assert.Equal(original, File.ReadAllBytes(heavy));
+        Assert.Null(planned.BackupDir);
+
+        var applied = FolderOptimizer.Optimize(resource, backup, dryRun: false);
+
+        Assert.True(Assert.Single(applied.Changes).NewGraphicsSize < applied.Changes[0].OldGraphicsSize);
+        Assert.Equal(original, File.ReadAllBytes(Path.Combine(backup, "stream", "a.ytd")));
+        Assert.Empty(FolderOptimizer.Optimize(resource, backup, dryRun: true).Changes);
+        Assert.Throws<ArgumentException>(() => FolderOptimizer.Optimize(resource, Path.Combine(resource, "bk"), dryRun: false));
+    }
+
+    private ClothingProject SingleHat()
+    {
+        File.WriteAllBytes(Path.Combine(_dir, "hat.ydd"), []);
+        return new ClothingProject
+        {
+            Name = "t",
+            CollectionName = "t",
+            Drawables = [new Drawable { Name = "hat", Prop = PropSlot.Hat, ModelPath = "hat.ydd", Textures = [new() { TexturePath = "hat.ytd" }] }],
+        };
+    }
 }

@@ -29,7 +29,7 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     private int _validationVersion;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand), nameof(PackProjectCommand), nameof(ImportCommand), nameof(ImportFolderCommand), nameof(ImportTattoosCommand), nameof(EditTextureCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyFixCommand), nameof(FixAllCommand), nameof(BuildResourceCommand), nameof(PackProjectCommand), nameof(ImportCommand), nameof(ImportFolderCommand), nameof(ImportTattoosCommand), nameof(EditTextureCommand), nameof(OptimizeFolderCommand))]
     public partial bool IsBusy { get; private set; }
 
     [ObservableProperty]
@@ -151,16 +151,28 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
     [RelayCommand]
     private async Task NewProjectAsync()
     {
-        if (await dialogs.PickFolderAsync("Carpeta del nuevo proyecto") is not { } dir) return;
-        if (Directory.EnumerateFiles(dir, "*" + ProjectFile.Extension).Any())
-        {
-            Status = "Esa carpeta ya tiene un proyecto. Usa Abrir.";
-            return;
-        }
+        if (await dialogs.PickFolderAsync("Carpeta del nuevo proyecto") is not { } picked) return;
+        if (await FreeProjectDirAsync(picked) is { } dir) await CreateProjectAsync(dir);
+    }
 
+    // A folder holds a single project; if it already has one, the new project goes in a subfolder named by the user.
+    private async Task<string?> FreeProjectDirAsync(string dir)
+    {
+        if (!ProjectFolder.HasProject(dir)) return dir;
+        var file = await dialogs.PickSaveFileAsync("Esa carpeta ya tiene un proyecto: nombre del nuevo", "Nuevo proyecto", "Proyecto EasyClothes", ProjectFile.Extension, dir);
+        if (file is null) return null;
+        var sub = ProjectFolder.SubfolderFor(file);
+        if (!ProjectFolder.HasProject(sub)) return sub;
+        Status = $"{sub} ya tiene un proyecto. Usa Abrir.";
+        return null;
+    }
+
+    public async Task CreateProjectAsync(string dir)
+    {
         var name = Path.GetFileName(Path.TrimEndingDirectorySeparator(dir));
         var project = new ClothingProject { Name = name, CollectionName = ClothingProject.CollectionNameFrom(name) };
         var file = ProjectPathFor(dir, project);
+        Directory.CreateDirectory(dir);
         await ProjectFile.SaveAsync(project, file);
         LoadProject(project, dir);
         Watch(file);
@@ -195,9 +207,11 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         if (!IsDraft)
         {
             await SaveProjectFileAsync();
+            await RefreshResourceAsync();
             return;
         }
-        if (await dialogs.PickFolderAsync("Carpeta donde guardar el proyecto") is { } dir) await SaveDraftAsAsync(dir);
+        if (await dialogs.PickFolderAsync("Carpeta donde guardar el proyecto") is { } picked && await FreeProjectDirAsync(picked) is { } dir)
+            await SaveDraftAsAsync(dir);
     }
 
     public async Task<bool> SaveDraftAsAsync(string targetDir)
@@ -1018,6 +1032,21 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         await BuildResourceAsync(Path.Combine(parent, Project!.CollectionName));
     }
 
+    // After Guardar, the generated resource is rebuilt so its stream files match what the app shows.
+    private async Task RefreshResourceAsync()
+    {
+        if (_projectFile is null || !Settings.ResourceFolders.TryGetValue(_projectFile, out var outputDir)) return;
+        if (!Directory.Exists(Path.GetDirectoryName(outputDir)))
+        {
+            Status += $" El recurso no se ha actualizado: no existe {Path.GetDirectoryName(outputDir)}.";
+            return;
+        }
+        await BuildResourceAsync(outputDir);
+        Status = Status.StartsWith("Recurso generado")
+            ? $"Proyecto guardado y recurso actualizado en {outputDir}."
+            : $"Proyecto guardado. {Status}";
+    }
+
     public async Task BuildResourceAsync(string outputDir)
     {
         var snapshot = ProjectFile.Deserialize(ProjectFile.Serialize(Project!));
@@ -1027,6 +1056,11 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         try
         {
             var result = await Task.Run(() => ResourceExporter.Export(snapshot, dir, outputDir));
+            if (_projectFile is not null && Settings.ResourceFolders.GetValueOrDefault(_projectFile) != outputDir)
+            {
+                Settings.ResourceFolders[_projectFile] = outputDir;
+                SaveSettings();
+            }
             Status = $"Recurso generado en {result.OutputDir}: {result.Drawables} prenda(s), {result.Files} archivo(s)."
                 + (result.Warnings.Count > 0 ? " " + string.Join(" ", result.Warnings) : "");
         }
@@ -1110,6 +1144,54 @@ public sealed partial class MainWindowViewModel(IDialogService dialogs) : Observ
         }
         await ValidateAsync();
         await LoadPreviewAsync();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanImport))]
+    private async Task OptimizeFolderAsync()
+    {
+        if (await dialogs.PickFolderAsync("Recurso o carpeta con texturas (.ytd) a optimizar") is { } folder) await OptimizeFolderAsync(folder);
+    }
+
+    // Lists what would change first and asks, since a built resource has no project history to undo it.
+    public async Task OptimizeFolderAsync(string folder)
+    {
+        var backup = FolderOptimizer.DefaultBackupDir(folder);
+        var progress = new Progress<(int Done, int Total)>(p => Status = $"Revisando {p.Done}/{p.Total}…");
+        IsBusy = true;
+        try
+        {
+            var plan = await Task.Run(() => FolderOptimizer.Optimize(folder, backup, dryRun: true, progress: progress));
+            var models = plan.OversizedModels.Count > 0 ? $" {plan.OversizedModels.Count} modelo(s) .ydd pasan de 16 MiB y no se tocan." : "";
+            if (plan.Changes.Count == 0)
+            {
+                Status = $"No hay texturas que optimizar en {plan.Scanned} archivo(s).{models}";
+                return;
+            }
+
+            var before = plan.Changes.Sum(c => (long)c.OldGraphicsSize) / 1048576;
+            var choice = await dialogs.ChooseAsync("Optimizar recurso",
+                $"Se van a comprimir o reducir {plan.Changes.Count} textura(s), que ahora ocupan {before:N0} MiB de memoria.{models}\n\nLos originales se copian a {backup}.",
+                ["Optimizar", "Cancelar"]);
+            if (choice != 0)
+            {
+                Status = "Optimización cancelada.";
+                return;
+            }
+
+            progress = new Progress<(int Done, int Total)>(p => Status = $"Optimizando {p.Done}/{p.Total}…");
+            var result = await Task.Run(() => FolderOptimizer.Optimize(folder, backup, dryRun: false, progress: progress));
+            var after = result.Changes.Sum(c => (long)(c.NewGraphicsSize ?? 0)) / 1048576;
+            var failed = result.Failed.Count > 0 ? $" {result.Failed.Count} no se pudieron leer, p. ej.: {result.Failed[0]}" : "";
+            Status = $"{result.Changes.Count} textura(s) optimizadas: {before:N0} → {after:N0} MiB. Originales en {result.BackupDir}.{failed}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            Status = $"No se pudo optimizar: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
     }
 
     [RelayCommand]
