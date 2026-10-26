@@ -6,9 +6,11 @@ using static EasyClothes.Core.Rage.Meta.PedVariationSchema;
 namespace EasyClothes.Core.Rage;
 
 // One drawable as the .ymt sees it. HeelHeight only matters for shoes and HairScale for hats.
+// Alternates is the highest "_k" model streamed next to it; PropMask leaves out 0x10, which is Skin.
 public sealed record VariationDrawable(int Textures)
 {
-    public bool FirstPerson { get; init; }
+    public int Alternates { get; init; }
+    public int PropMask { get; init; } = 1;
     public bool Skin { get; init; }
     public bool Cloth { get; init; }
     public float HeelHeight { get; init; }
@@ -54,8 +56,8 @@ public sealed record PedVariation(
                     textures[t * 3 + 1] = 0xFF;
                 }
                 var item = drawables.AsSpan(d * 0x30, 0x30);
-                item[0] = (byte)(items[d].Skin ? 17 : 1); // propMask: skin-toned ("_r") or universal ("_u")
-                item[1] = (byte)(items[d].FirstPerson ? 1 : 0); // alternates: "_1" is the first person model
+                item[0] = (byte)(items[d].PropMask & ~0x10 | (items[d].Skin ? 0x10 : 0)); // propMask: 0x10 is skin-toned ("_r")
+                item[1] = (byte)items[d].Alternates; // numAlternatives
                 item[0x18] = (byte)(items[d].Cloth ? 1 : 0);
                 MetaBuilder.WriteArray(item[8..], builder.Append(TextureData, textures), items[d].Textures);
             }
@@ -161,7 +163,8 @@ public sealed record PedVariation(
                 meta.Array(item[8..], 3, out var textures);
                 items[d] = new VariationDrawable(textures)
                 {
-                    FirstPerson = item[1] > 0,
+                    Alternates = item[1],
+                    PropMask = item[0] & ~0x10,
                     Skin = (item[0] & 0x10) != 0,
                     Cloth = item[0x18] > 0,
                     HeelHeight = heels.GetValueOrDefault((slot, d)),

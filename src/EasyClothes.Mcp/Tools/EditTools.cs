@@ -46,13 +46,14 @@ public sealed class EditTools(Workspace workspace)
     }
 
     [McpServerTool(Name = "update_project", Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Cambia el nombre, la colección, el autor o la descripción del proyecto. Lo que no se indique no cambia.")]
+    [Description("Cambia el nombre, la colección, el autor, la descripción del proyecto o si el .meta de tienda lista las prendas. Lo que no se indique no cambia.")]
     public async Task<ProjectSummary> UpdateProject(
         [Description(ProjectParam)] string project,
         string? name = null,
         [Description("Nombre de colección para el juego: minúsculas, números y _.")] string? collection = null,
         string? author = null,
         string? description = null,
+        [Description("Si build_resource escribe en el .meta de tienda una ficha (pedComponents, pedProps) por prenda y textura, como EUP. FiveM no las necesita para mostrar la ropa.")] bool? shopEntries = null,
         CancellationToken ct = default)
     {
         var loaded = await workspace.LoadAsync(project, ct);
@@ -63,12 +64,13 @@ public sealed class EditTools(Workspace workspace)
         p.CollectionName = collection ?? p.CollectionName;
         p.Author = author ?? p.Author;
         p.Description = description ?? p.Description;
+        p.ShopEntries = shopEntries ?? p.ShopEntries;
         await Workspace.SaveAsync(loaded, ct);
         return await new ProjectTools(workspace).GetProject(loaded.File, ct);
     }
 
     [McpServerTool(Name = "import_garments", Destructive = false, OpenWorld = false)]
-    [Description("Importa prendas: archivos .ydd sueltos (con sus texturas, modelo de primera persona _1.ydd y físicas .yld al lado) o carpetas. Una carpeta de recurso ya generado (con su .ymt) conserva el número y las opciones de cada prenda, solo las texturas que declara el .ymt y su pedalternatevariations.meta. Cada prenda guarda de qué carpeta y archivo viene. Los zapatos con tacón se detectan solos.")]
+    [Description("Importa prendas: archivos .ydd sueltos (con sus texturas, modelos alternativos <modelo>_1.ydd, _2.ydd… y físicas .yld al lado) o carpetas. Una carpeta de recurso ya generado (con su .ymt) conserva el número y las opciones de cada prenda (también su propMask), solo las texturas que declara el .ymt y su pedalternatevariations.meta. Cada prenda guarda de qué carpeta y archivo viene. Los zapatos con tacón se detectan solos.")]
     public async Task<ImportSummary> ImportGarments(
         [Description(ProjectParam)] string project,
         [Description("Rutas de archivos .ydd o de carpetas.")] string[] paths,
@@ -96,6 +98,7 @@ public sealed class EditTools(Workspace workspace)
         [Description("Solo calzado: altura del tacón (1 = tacones del juego, unos 9 cm). 0 los quita.")] float? heelHeight = null,
         [Description("Solo sombreros: pelo debajo, keep (entero), cut (recortado) o remove (oculto).")] string? hatHair = null,
         [Description("Si el modelo alternativo _1.ydd se usa en primera persona (true) o solo mediante pedalternatevariations (false).")] bool? alternateInFirstPerson = null,
+        [Description("Solo componentes: propMask del .ymt (1 normal; EUP usa también 5, 9, 11 y 65). El bit 16 lo pone siempre el tipo de piel (_r).")] int? propMask = null,
         [Description("Origen: paquete (carpeta, recurso o DLC) del que viene la prenda.")] string? sourcePackage = null,
         [Description("Origen: nombre del archivo del modelo en ese paquete.")] string? sourceFile = null,
         CancellationToken ct = default)
@@ -134,6 +137,12 @@ public sealed class EditTools(Workspace workspace)
             d.Flags.HatHair = Enum.TryParse<HatHair>(hatHair, ignoreCase: true, out var hair) ? hair : throw new McpException("hatHair debe ser keep, cut o remove.");
         }
         if (alternateInFirstPerson is { } inFirstPerson) d.Flags.AlternateInFirstPerson = inFirstPerson;
+        if (propMask is { } mask)
+        {
+            if (d.IsProp) throw new McpException($"{d.Name} es un accesorio; el propMask solo existe en las componentes.");
+            if (mask is < 0 or > 255) throw new McpException("propMask debe estar entre 0 y 255.");
+            d.Flags.PropMask = mask;
+        }
         await Workspace.SaveAsync(loaded, ct);
         return Describe.Garment(loaded.Project, d);
     }
@@ -194,17 +203,18 @@ public sealed class EditTools(Workspace workspace)
     }
 
     [McpServerTool(Name = "set_garment_file", Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Pone o quita el modelo de primera persona (_1.ydd) o las físicas de tela (.yld) de una prenda. Sin ruta, lo quita.")]
+    [Description("Pone o quita un modelo alternativo <modelo>_k.ydd (el _1 puede ser además el de primera persona; los demás solo los usa pedalternatevariations.meta) o las físicas de tela (.yld) de una prenda. Sin ruta, lo quita. El .ymt declara tantos alternativos como el mayor k.")]
     public async Task<GarmentSummary> SetGarmentFile(
         [Description(ProjectParam)] string project,
         [Description(GarmentParam)] string garment,
-        [Description("first_person o cloth_physics.")] string kind,
+        [Description("first_person (igual que alternate con index 1), alternate o cloth_physics.")] string kind,
         [Description("Ruta del archivo; vacío para quitarlo.")] string? path = null,
+        [Description("Solo con alternate: k del modelo <modelo>_k.ydd, de 1 a 9.")] int? index = null,
         CancellationToken ct = default)
     {
         var loaded = await workspace.LoadAsync(project, ct);
         var d = Workspace.FindGarment(loaded.Project, garment);
-        if (d.IsProp || d.Reserved) throw new McpException($"{d.Name} no admite modelo de primera persona ni físicas de tela.");
+        if (d.IsProp || d.Reserved) throw new McpException($"{d.Name} no admite modelos alternativos ni físicas de tela.");
         var source = string.IsNullOrWhiteSpace(path) ? null : workspace.Resolve(path);
         if (source is not null && !File.Exists(source)) throw new McpException($"No existe {path}.");
         switch (kind.Trim().ToLowerInvariant())
@@ -213,12 +223,17 @@ public sealed class EditTools(Workspace workspace)
                 if (source is null) d.FirstPersonModelPath = null;
                 else DrawableImporter.AttachFirstPerson(loaded.Dir, d, source);
                 break;
+            case "alternate":
+                if (index is not (>= 1 and <= 9)) throw new McpException("Con kind alternate indica index, de 1 a 9.");
+                if (source is null) DrawableImporter.RemoveAlternate(d, index.Value);
+                else DrawableImporter.AttachAlternate(loaded.Dir, d, index.Value, source);
+                break;
             case "cloth_physics":
                 if (source is null) d.ClothPhysicsPath = null;
                 else DrawableImporter.AttachClothPhysics(loaded.Dir, d, source);
                 break;
             default:
-                throw new McpException("kind debe ser first_person o cloth_physics.");
+                throw new McpException("kind debe ser first_person, alternate o cloth_physics.");
         }
         await Workspace.SaveAsync(loaded, ct);
         return Describe.Garment(loaded.Project, d);
@@ -294,7 +309,7 @@ public sealed class EditTools(Workspace workspace)
     }
 
     [McpServerTool(Name = "build_resource", Destructive = true, Idempotent = true, OpenWorld = false)]
-    [Description("Genera el recurso de FiveM (fxmanifest.lua, stream con .ymt y archivos renombrados, .meta de tienda, tacones y sombreros, primera persona, pedalternatevariations.meta si el proyecto tiene interruptores, tatuajes). Solo sobrescribe carpetas vacías o generadas por EasyClothes. Falla con la lista de errores si el proyecto tiene alguno.")]
+    [Description("Genera el recurso de FiveM (fxmanifest.lua, stream con .ymt y archivos renombrados, .meta de tienda (con una ficha por prenda y textura si el proyecto tiene shopEntries), tacones y sombreros, modelos alternativos _k y primera persona, pedalternatevariations.meta si el proyecto tiene interruptores, tatuajes). Solo sobrescribe carpetas vacías o generadas por EasyClothes. Falla con la lista de errores si el proyecto tiene alguno.")]
     public async Task<BuildReport> BuildResource(
         [Description(ProjectParam)] string project,
         [Description("Carpeta de salida; su nombre será el del recurso. Por defecto, build/<colección> dentro del proyecto.")] string? output = null,

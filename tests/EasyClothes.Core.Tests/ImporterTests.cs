@@ -52,11 +52,12 @@ public sealed class ImporterTests : IDisposable
     }
 
     [Fact]
-    public void First_person_models_and_cloth_physics_come_along_with_their_garment()
+    public void Alternate_models_and_cloth_physics_come_along_with_their_garment()
     {
         Touch("mp_f_freemode_01_mine^lowr_002_u.ydd");
         Touch("mp_f_freemode_01_mine^lowr_diff_002_a_uni.ytd");
         Touch("mp_f_freemode_01_mine^lowr_002_u_1.ydd");
+        Touch("mp_f_freemode_01_mine^lowr_002_u_2.ydd");
         Touch("mp_f_freemode_01_mine^lowr_002_u.yld");
         Touch("other/jbib_005_u_1.ydd");
         var project = NewProject();
@@ -65,9 +66,11 @@ public sealed class ImporterTests : IDisposable
 
         var skirt = Assert.Single(result.Added);
         Assert.EndsWith("lowr_002_u_1.ydd", skirt.FirstPersonModelPath);
+        Assert.EndsWith("lowr_002_u_2.ydd", Assert.Single(skirt.AlternateModels, a => a.Alt == 2).ModelPath);
+        Assert.Equal(2, skirt.AlternateCount());
         Assert.EndsWith("lowr_002_u.yld", skirt.ClothPhysicsPath);
         Assert.True(File.Exists(Path.Combine(ProjectDir, skirt.ClothPhysicsPath!)));
-        Assert.Contains(result.Warnings, w => w.Contains("jbib_005_u_1.ydd") && w.Contains("primera persona"));
+        Assert.Contains(result.Warnings, w => w.Contains("jbib_005_u_1.ydd") && w.Contains("alternativo"));
         Assert.DoesNotContain(ProjectValidator.Validate(project, ProjectDir), i => i.Severity == IssueSeverity.Error);
     }
 

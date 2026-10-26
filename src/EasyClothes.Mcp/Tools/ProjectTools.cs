@@ -17,7 +17,7 @@ public sealed record ProjectSummary(
 public sealed record TextureDetail(string Letter, string File, int? Width, int? Height, string? Format, int? Mips, int? MemoryKiB);
 
 public sealed record GarmentDetail(
-    GarmentSummary Summary, string? ModelFile, string? FirstPersonFile, string? ClothPhysicsFile,
+    GarmentSummary Summary, string? ModelFile, string? FirstPersonFile, IReadOnlyList<string> AlternateFiles, string? ClothPhysicsFile,
     IReadOnlyList<string> Lods, IReadOnlyList<TextureDetail> Textures, IReadOnlyList<IssueInfo> Issues);
 
 [McpServerToolType]
@@ -63,7 +63,8 @@ public sealed class ProjectTools(Workspace workspace)
             Describe.Garments(p).ToList(), p.Tattoos.Select(Describe.Tattoo).ToList(), p.AlternateVariations.Count,
             issues.Count(i => i.Severity == IssueSeverity.Error), issues.Count(i => i.Severity == IssueSeverity.Warning),
             "Number es el número de la prenda en el juego dentro de su hueco; SourcePackage y SourceFile dicen de qué carpeta y archivo se importó. "
-            + "AlternateSwitches son los interruptores de modelo alternativo (_1.ydd) que build_resource escribe en pedalternatevariations.meta, con los números absolutos del juego del recurso importado. validate analiza además modelos y texturas.");
+            + "Alternates es el mayor k de sus modelos alternativos <modelo>_k.ydd (numAlternatives del .ymt) y PropMask el propMask del .ymt. "
+            + "AlternateSwitches son los interruptores de modelo alternativo (_k.ydd) que build_resource escribe en pedalternatevariations.meta, con los números absolutos del juego del recurso importado. validate analiza además modelos y texturas.");
     }
 
     [McpServerTool(Name = "get_garment", ReadOnly = true, Idempotent = true, OpenWorld = false)]
@@ -109,7 +110,7 @@ public sealed class ProjectTools(Workspace workspace)
         var issues = ProjectValidator.Validate(loaded.Project, loaded.Dir, workspace.Cache)
             .Where(i => i.DrawableId == d.Id).Select(i => Describe.Issue(loaded.Project, i)).ToList();
         return new GarmentDetail(Describe.Garment(loaded.Project, d), d.Reserved ? null : Full(d.ModelPath),
-            Full(d.FirstPersonModelPath), Full(d.ClothPhysicsPath), lods, textures, issues);
+            Full(d.FirstPersonModelPath), d.AlternateModels.Select(a => Full(a.ModelPath)!).ToList(), Full(d.ClothPhysicsPath), lods, textures, issues);
     }
 
     [McpServerTool(Name = "validate", ReadOnly = true, Idempotent = true, OpenWorld = false)]

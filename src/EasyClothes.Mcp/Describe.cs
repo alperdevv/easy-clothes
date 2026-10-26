@@ -5,7 +5,8 @@ namespace EasyClothes.Mcp;
 
 public sealed record GarmentSummary(
     string Id, string Name, string Gender, string Slot, string SlotCode, int Number, int Textures,
-    bool Reserved, bool AlternateModel, bool FirstPerson, bool ClothPhysics, float? HeelHeight, string? HatHair, string? SourcePackage, string? SourceFile);
+    bool Reserved, bool AlternateModel, bool FirstPerson, int Alternates, bool ClothPhysics, float? HeelHeight, string? HatHair, int? PropMask,
+    string? SourcePackage, string? SourceFile);
 
 public sealed record TattooSummary(string Id, string Name, string Zone, IReadOnlyList<string> Genders);
 
@@ -21,10 +22,14 @@ public static class Describe
         d.Component?.ToString() ?? $"Prop{d.Prop}",
         d.Component is { } c ? PedSlotNames.FileCode(c) : d.Prop is { } p ? PedSlotNames.FileCode(p) : "?",
         DrawableOrder.NumberOf(project, d), d.Textures.Count, d.Reserved,
-        d.FirstPersonModelPath is not null, d.FirstPersonModelPath is not null && d.Flags.AlternateInFirstPerson, d.ClothPhysicsPath is not null,
+        d.FirstPersonModelPath is not null, d.FirstPersonModelPath is not null && d.Flags.AlternateInFirstPerson, d.AlternateCount(), d.ClothPhysicsPath is not null,
         d.Component == ComponentSlot.Shoes ? d.Flags.HeelHeight : null,
         d.Prop == PropSlot.Hat ? d.Flags.HatHair.ToString() : null,
+        d.Component is null ? null : PropMask(d),
         d.Source?.Package, d.Source?.File);
+
+    // As the .ymt gets it: 0x10 follows Skin.
+    public static int PropMask(Drawable d) => (d.Flags.PropMask ?? 1) & ~0x10 | (d.Skin ? 0x10 : 0);
 
     public static IEnumerable<GarmentSummary> Garments(ClothingProject project) =>
         project.Drawables

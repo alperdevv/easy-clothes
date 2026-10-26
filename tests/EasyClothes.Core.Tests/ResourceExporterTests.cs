@@ -74,7 +74,7 @@ public sealed class ResourceExporterTests : IDisposable
         Assert.Equal("skirt.yld", File.ReadAllText(Path.Combine(female, "mp_f_freemode_01_ropa^lowr_000_u.yld")));
 
         var variation = PedVariation.Read(ResourceFile.Read(Path.Combine(Output, "stream", "mp_f_freemode_01_ropa.ymt")));
-        Assert.True(variation.Components[ComponentSlot.Top][0].FirstPerson);
+        Assert.Equal(1, variation.Components[ComponentSlot.Top][0].Alternates);
         Assert.True(variation.Components[ComponentSlot.Legs][0].Cloth);
         Assert.Equal([0f, 1.3f], variation.Components[ComponentSlot.Shoes].Select(d => d.HeelHeight));
         Assert.Equal([0f, -1f], variation.Props[PropSlot.Hat].Select(d => d.HairScale));
@@ -89,6 +89,28 @@ public sealed class ResourceExporterTests : IDisposable
         var alternate = Assert.Single(XDocument.Load(Path.Combine(Output, "first_person_alternates_ropa.meta")).Root!.Element("alternates")!.Elements("Item"));
         Assert.Equal("mp_f_freemode_01_ropa/jbib_000_u", alternate.Element("assetName")?.Value);
         Assert.Contains("data_file 'PED_FIRST_PERSON_ALTERNATE_DATA' 'first_person_alternates_ropa.meta'", File.ReadAllText(Path.Combine(Output, "fxmanifest.lua")));
+    }
+
+    [Fact]
+    public void Shop_entries_list_every_garment_and_texture_only_when_asked()
+    {
+        var project = Project(
+            Item("chaqueta", PedGender.Male, ComponentSlot.Top, textures: 2),
+            Item("gorra", PedGender.Male, prop: PropSlot.Hat, textures: 1));
+        DrawableOrder.Reserve(project, PedGender.Male, ComponentSlot.Top, null);
+
+        ResourceExporter.Export(project, _dir, Output);
+        Assert.Empty(XDocument.Load(Path.Combine(Output, "mp_m_freemode_01_ropa.meta")).Root!.Element("pedComponents")!.Elements());
+
+        project.ShopEntries = true;
+        ResourceExporter.Export(project, _dir, Output);
+
+        var shop = XDocument.Load(Path.Combine(Output, "mp_m_freemode_01_ropa.meta")).Root!;
+        var tops = shop.Element("pedComponents")!.Elements("Item").ToList();
+        Assert.Equal(["CLO_ROPA_JBIB_0_0_M", "CLO_ROPA_JBIB_0_1_M"], tops.Select(i => i.Element("uniqueNameHash")?.Value));
+        Assert.Equal(["PV_COMP_JBIB", "1"], [tops[1].Element("eCompType")!.Value, tops[1].Element("textureIndex")!.Attribute("value")!.Value]);
+        var hat = Assert.Single(shop.Element("pedProps")!.Elements("Item"));
+        Assert.Equal(("CLO_ROPA_PHEAD_0_0_M", "ANCHOR_HEAD"), (hat.Element("uniqueNameHash")?.Value, hat.Element("eAnchorPoint")?.Value));
     }
 
     [Fact]
@@ -114,7 +136,7 @@ public sealed class ResourceExporterTests : IDisposable
         ResourceExporter.Export(Project(mask), _dir, Output);
 
         Assert.True(File.Exists(Path.Combine(Output, "stream", "mp_m_freemode_01", "mp_m_freemode_01_ropa^berd_000_u_1.ydd")));
-        Assert.True(PedVariation.Read(ResourceFile.Read(Path.Combine(Output, "stream", "mp_m_freemode_01_ropa.ymt"))).Components[ComponentSlot.Mask][0].FirstPerson);
+        Assert.Equal(1, PedVariation.Read(ResourceFile.Read(Path.Combine(Output, "stream", "mp_m_freemode_01_ropa.ymt"))).Components[ComponentSlot.Mask][0].Alternates);
         Assert.False(File.Exists(Path.Combine(Output, "first_person_alternates_ropa.meta")));
     }
 

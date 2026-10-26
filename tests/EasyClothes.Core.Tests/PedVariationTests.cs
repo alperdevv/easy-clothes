@@ -11,8 +11,8 @@ public class PedVariationTests
     {
         var components = new Dictionary<ComponentSlot, IReadOnlyList<VariationDrawable>>
         {
-            [ComponentSlot.Top] = [new(3) { FirstPerson = true }, new(1) { Cloth = true }, new(26)],
-            [ComponentSlot.Mask] = [new(2)],
+            [ComponentSlot.Top] = [new(3) { Alternates = 1 }, new(1) { Cloth = true }, new(26)],
+            [ComponentSlot.Mask] = [new(2), new(1) { Alternates = 2, PropMask = 5 }, new(3) { Skin = true, PropMask = 11 }],
             [ComponentSlot.Shoes] = [new(1), new(2) { HeelHeight = 1.4f }],
         };
         var props = new Dictionary<PropSlot, IReadOnlyList<VariationDrawable>>

@@ -38,7 +38,7 @@ public static class DrawableImporter
             if (model.Alternate > 0)
             {
                 if (!File.Exists(MainModelOf(modelPath)))
-                    warnings.Add($"{Path.GetFileName(modelPath)}: es un modelo de primera persona y no está junto a su prenda; impórtalo desde la carpeta de la prenda.");
+                    warnings.Add($"{Path.GetFileName(modelPath)}: es un modelo alternativo (_{model.Alternate}) y no está junto a su prenda; impórtalo desde la carpeta de la prenda.");
                 continue;
             }
 
@@ -65,7 +65,7 @@ public static class DrawableImporter
             .Any(folder => full.StartsWith(Path.Combine(Path.GetFullPath(projectDir), folder) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
     }
 
-    // Copies one model with its textures, first person model and cloth physics; the caller adds it to the project.
+    // Copies one model with its textures, alternate models and cloth physics; the caller adds it to the project.
     internal static Drawable Create(ClothingProject project, string projectDir, string modelPath, ModelName model, PedGender gender, IReadOnlyList<string> textures, string package, List<string> warnings)
     {
         var name = $"{model.Slot.FileCode}_{model.Index:D3}";
@@ -83,8 +83,12 @@ public static class DrawableImporter
                 .ToList(),
             Source = new GarmentSource { Package = package, File = Path.GetFileName(modelPath) },
         };
-        var firstPerson = Path.Combine(Path.GetDirectoryName(modelPath)!, Path.GetFileNameWithoutExtension(modelPath) + "_1.ydd");
-        if (File.Exists(firstPerson)) drawable.FirstPersonModelPath = CopyInto(projectDir, targetDir, firstPerson);
+        foreach (var (alt, file) in AlternatesBeside(modelPath))
+        {
+            var copied = CopyInto(projectDir, targetDir, file);
+            if (alt == 1) drawable.FirstPersonModelPath = copied;
+            else drawable.AlternateModels.Add(new AlternateModel { Alt = alt, ModelPath = copied });
+        }
         var cloth = Path.ChangeExtension(modelPath, ".yld");
         if (File.Exists(cloth)) drawable.ClothPhysicsPath = CopyInto(projectDir, targetDir, cloth);
         if (drawable.Component == ComponentSlot.Shoes) drawable.Flags.HeelHeight = EstimateHeel(modelPath);
@@ -95,9 +99,35 @@ public static class DrawableImporter
         return drawable;
     }
 
+    // "<model>_1.ydd" … "<model>_9.ydd" next to the model, in order.
+    private static IEnumerable<(int Alt, string Path)> AlternatesBeside(string modelPath)
+    {
+        var stem = Path.Combine(Path.GetDirectoryName(modelPath)!, Path.GetFileNameWithoutExtension(modelPath));
+        return Enumerable.Range(1, 9).Select(k => (k, $"{stem}_{k}.ydd")).Where(a => File.Exists(a.Item2));
+    }
+
     // Files chosen by hand are stored next to the model with the names the game expects.
     public static void AttachFirstPerson(string projectDir, Drawable drawable, string source) =>
         drawable.FirstPersonModelPath = CopyBesideModel(projectDir, drawable, source, "_1.ydd");
+
+    public static void AttachAlternate(string projectDir, Drawable drawable, int alt, string source)
+    {
+        if (alt == 1)
+        {
+            AttachFirstPerson(projectDir, drawable, source);
+            return;
+        }
+        var path = CopyBesideModel(projectDir, drawable, source, $"_{alt}.ydd");
+        drawable.AlternateModels.RemoveAll(a => a.Alt == alt);
+        drawable.AlternateModels.Add(new AlternateModel { Alt = alt, ModelPath = path });
+        drawable.AlternateModels.Sort((a, b) => a.Alt.CompareTo(b.Alt));
+    }
+
+    public static void RemoveAlternate(Drawable drawable, int alt)
+    {
+        if (alt == 1) drawable.FirstPersonModelPath = null;
+        else drawable.AlternateModels.RemoveAll(a => a.Alt == alt);
+    }
 
     public static void AttachClothPhysics(string projectDir, Drawable drawable, string source) =>
         drawable.ClothPhysicsPath = CopyBesideModel(projectDir, drawable, source, ".yld");

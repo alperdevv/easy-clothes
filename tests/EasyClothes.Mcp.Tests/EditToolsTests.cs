@@ -63,6 +63,33 @@ public sealed class EditToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task Alternate_models_prop_mask_and_shop_entries_can_be_set_by_hand()
+    {
+        var project = Path.Combine(_root, "p");
+        await _edit.CreateProject(project, "P");
+        foreach (var name in new[] { "decl_000_u.ydd", "decl_diff_000_a_uni.ytd", "parche_alt.ydd" })
+            await File.WriteAllTextAsync(Path.Combine(_root, name), name);
+        await _edit.ImportGarments(project, [Path.Combine(_root, "decl_000_u.ydd")]);
+
+        var patch = await _edit.SetGarmentFile(project, "decl_000", "alternate", Path.Combine(_root, "parche_alt.ydd"), index: 2);
+        Assert.Equal((2, false), (patch.Alternates, patch.FirstPerson));
+        Assert.Equal(5, (await _edit.UpdateGarment(project, "decl_000", propMask: 5)).PropMask);
+        await _edit.UpdateProject(project, shopEntries: true);
+        var detail = await _read.GetGarment(project, "decl_000", default);
+        Assert.EndsWith("decl_000_u_2.ydd", Assert.Single(detail.AlternateFiles));
+        Assert.Contains(detail.Issues, i => i.Message.Contains("_2 pero no el _1"));
+
+        var build = await _edit.BuildResource(project);
+        var stream = Path.Combine(build.Output, "stream");
+        Assert.True(File.Exists(Path.Combine(stream, "mp_m_freemode_01", "mp_m_freemode_01_p^decl_000_u_2.ydd")));
+        Assert.Equal((2, 5), PedVariation.Read(ResourceFile.Read(Path.Combine(stream, "mp_m_freemode_01_p.ymt"))).Components[ComponentSlot.Decal].Select(d => (d.Alternates, d.PropMask)).Single());
+        Assert.Contains("CLO_P_DECL_0_0_M", await File.ReadAllTextAsync(Path.Combine(build.Output, "mp_m_freemode_01_p.meta")));
+
+        Assert.Equal(0, (await _edit.SetGarmentFile(project, "decl_000", "alternate", index: 2)).Alternates);
+        Assert.Contains("index", (await Assert.ThrowsAsync<McpException>(() => _edit.SetGarmentFile(project, "decl_000", "alternate", Path.Combine(_root, "parche_alt.ydd")))).Message);
+    }
+
+    [Fact]
     public async Task Mistakes_come_back_as_clear_messages()
     {
         var project = Path.Combine(_root, "p");

@@ -25,6 +25,10 @@ public static class ProjectValidator
                 AnalyzeModel(issues, d, d.ModelPath, modelFile, cache, limits);
             if (d.FirstPersonModelPath is { } firstPerson && !File.Exists(Path.Combine(projectDir, firstPerson)))
                 issues.Add(new(IssueSeverity.Error, $"{d.Name}: falta el modelo de primera persona {firstPerson}.", d.Id));
+            foreach (var alternate in d.AlternateModels.Where(a => !File.Exists(Path.Combine(projectDir, a.ModelPath))))
+                issues.Add(new(IssueSeverity.Error, $"{d.Name}: falta el modelo alternativo {alternate.ModelPath}.", d.Id));
+            if (Enumerable.Range(1, d.AlternateCount()).FirstOrDefault(k => d.AlternateModelPath(k) is null) is var gap and > 0)
+                issues.Add(new(IssueSeverity.Warning, $"{d.Name}: tiene el modelo alternativo _{d.AlternateCount()} pero no el _{gap}; el .ymt declarará {d.AlternateCount()} alternativos.", d.Id));
             if (d.ClothPhysicsPath is { } cloth && !File.Exists(Path.Combine(projectDir, cloth)))
                 issues.Add(new(IssueSeverity.Error, $"{d.Name}: faltan las físicas de tela {cloth}.", d.Id));
             if (d.Textures.Count == 0)
@@ -47,6 +51,7 @@ public static class ProjectValidator
             issues.Add(new(IssueSeverity.Warning, $"Hay {group.Count()} prendas llamadas {group.Key.Name} ({group.Key.Gender})."));
 
         if (cache is not null) FindDuplicates(issues, project, projectDir, cache);
+        CheckAlternateSwitches(issues, project);
 
         foreach (var t in project.Tattoos)
         {
@@ -62,6 +67,38 @@ public static class ProjectValidator
             issues.Add(new(IssueSeverity.Error, $"{props.Count()} props ({props.Key}); el máximo por sexo es {PedVariation.MaxDrawablesPerSlot}."));
 
         return issues;
+    }
+
+    // Switches use the game's absolute numbers, so the pack's first number in each slot is guessed as the
+    // one that makes the most switches land on a garment with the requested "_k" model.
+    private static void CheckAlternateSwitches(List<ValidationIssue> issues, ClothingProject project)
+    {
+        foreach (var group in project.AlternateVariations.GroupBy(s => (s.Gender, s.Component)))
+        {
+            if (!Enum.IsDefined((ComponentSlot)group.Key.Component)) continue;
+            var slot = (ComponentSlot)group.Key.Component;
+            var garments = ClothingProject.InGameOrder(project.DrawablesFor(group.Key.Gender).Where(d => d.Component == slot));
+            var votes = new Dictionary<int, int>();
+            foreach (var sw in group)
+                for (var i = 0; i < garments.Count; i++)
+                    if (garments[i].AlternateModelPath(sw.Alt) is not null && sw.Index >= i)
+                        votes[sw.Index - i] = votes.GetValueOrDefault(sw.Index - i) + 1;
+
+            var where = $"{PedSlotNames.FileCode(slot)} ({(group.Key.Gender == PedGender.Male ? "hombre" : "mujer")})";
+            if (votes.Count == 0)
+            {
+                foreach (var alt in group.GroupBy(s => s.Alt))
+                    issues.Add(new(IssueSeverity.Warning, $"pedalternatevariations.meta pide {alt.Count()} veces el modelo alternativo _{alt.Key} en {where} y ninguna prenda de ese hueco lo tiene; el juego no cambiará de modelo."));
+                continue;
+            }
+            var first = votes.MaxBy(v => (v.Value, -v.Key)).Key;
+            foreach (var target in group.Select(s => (Local: s.Index - first, s.Index, s.Alt)).Distinct())
+            {
+                if (target.Local < 0 || target.Local >= garments.Count || garments[target.Local] is { Reserved: true } || garments[target.Local].AlternateModelPath(target.Alt) is not null) continue;
+                var d = garments[target.Local];
+                issues.Add(new(IssueSeverity.Warning, $"{d.Name}: pedalternatevariations.meta pide su modelo alternativo _{target.Alt} (número {target.Index} del juego en {where}) y no lo tiene; el juego no cambiará de modelo.", d.Id));
+            }
+        }
     }
 
     // Same content means a double import or a copy that was never changed.

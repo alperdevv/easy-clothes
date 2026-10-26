@@ -2,6 +2,7 @@ using EasyClothes.Core.Export;
 using EasyClothes.Core.Importing;
 using EasyClothes.Core.Model;
 using EasyClothes.Core.Rage;
+using EasyClothes.Core.Validation;
 
 namespace EasyClothes.Core.Tests;
 
@@ -98,6 +99,48 @@ public sealed class ResourceImporterTests : IDisposable
         Assert.Equal(
             source.AlternateVariations.OrderBy(s => s.Gender).Select(Describe),
             project.AlternateVariations.Select(Describe));
+    }
+
+    [Fact]
+    public void Alternate_models_and_prop_masks_survive_import_and_build_and_switches_are_checked()
+    {
+        var stream = Directory.CreateDirectory(Path.Combine(_root, "pack", "stream")).FullName;
+        PedVariation.Write("mp_m_ropa",
+            new Dictionary<ComponentSlot, IReadOnlyList<VariationDrawable>>
+            {
+                [ComponentSlot.Decal] = [new(1) { Alternates = 2, PropMask = 5 }, new(1) { Alternates = 2, PropMask = 11, Skin = true }],
+            },
+            new Dictionary<PropSlot, IReadOnlyList<VariationDrawable>>())
+            .Write(Path.Combine(stream, "mp_m_freemode_01_mp_m_ropa.ymt"));
+        const string prefix = "mp_m_freemode_01_mp_m_ropa^";
+        Touch(stream, prefix + "decl_000_u.ydd", prefix + "decl_000_u_1.ydd", prefix + "decl_000_u_2.ydd", prefix + "decl_diff_000_a_uni.ytd");
+        Touch(stream, prefix + "decl_001_r.ydd", prefix + "decl_001_r_1.ydd", prefix + "decl_diff_001_a_whi.ytd");
+        File.WriteAllText(Path.Combine(_root, "pack", AlternateVariationsFile.FileName), AlternateVariationsFile.Write(
+        [
+            new AlternateVariation { Gender = PedGender.Male, Component = 10, Index = 300, Alt = 2, Sources = [new() { Component = 11, Index = 500 }] },
+            new AlternateVariation { Gender = PedGender.Male, Component = 10, Index = 300, Alt = 1, Sources = [new() { Component = 11, Index = 501 }] },
+            new AlternateVariation { Gender = PedGender.Male, Component = 10, Index = 301, Alt = 2, Sources = [new() { Component = 11, Index = 502 }] },
+            new AlternateVariation { Gender = PedGender.Male, Component = 7, Index = 90, Alt = 2, Sources = [new() { Component = 11, Index = 503 }] },
+        ]).ToString());
+        var project = new ClothingProject { Name = "Ropa", CollectionName = "ropa" };
+
+        var result = ResourceImporter.Import(project, ProjectDir, Path.Combine(_root, "pack"));
+
+        var decals = ClothingProject.InGameOrder(project.Drawables).ToList();
+        Assert.Equal([2, 1], decals.Select(d => d.AlternateCount()));
+        Assert.Equal([5, 27], decals.Select(d => d.Flags.PropMask));
+        Assert.Contains(result.Warnings, w => w.Contains("decl_001_r.ydd") && w.Contains("declara 2 modelos alternativos y solo hay 1"));
+        var issues = ProjectValidator.Validate(project, ProjectDir).Select(i => i.Message).ToList();
+        Assert.Contains(issues, m => m.StartsWith("decl_001: pedalternatevariations.meta pide su modelo alternativo _2 (número 301"));
+        Assert.Contains(issues, m => m.Contains("pide 1 veces el modelo alternativo _2 en teef (hombre)"));
+        Assert.DoesNotContain(issues, m => m.StartsWith("decl_000"));
+
+        var resource = Path.Combine(_root, "out", "ropa");
+        ResourceExporter.Export(project, ProjectDir, resource);
+
+        Assert.Equal(prefix + "decl_000_u_2.ydd", File.ReadAllText(Path.Combine(resource, "stream", "mp_m_freemode_01", "mp_m_freemode_01_ropa^decl_000_u_2.ydd")));
+        var built = PedVariation.Read(ResourceFile.Read(Path.Combine(resource, "stream", "mp_m_freemode_01_ropa.ymt"))).Components[ComponentSlot.Decal];
+        Assert.Equal([(2, 5, false), (1, 11, true)], built.Select(d => (d.Alternates, d.PropMask, d.Skin)));
     }
 
     private static string Describe(AlternateVariation s) =>

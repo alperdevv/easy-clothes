@@ -16,6 +16,9 @@ public sealed class ClothingProject
     public List<Drawable> Drawables { get; set; } = [];
     public List<Tattoo> Tattoos { get; set; } = [];
 
+    // Lists every garment and texture in the shop .meta; FiveM packs work without them.
+    public bool ShopEntries { get; set; }
+
     // Switches from an imported pedalternatevariations.meta, written back on export.
     public List<AlternateVariation> AlternateVariations { get; set; } = [];
 
@@ -60,6 +63,9 @@ public sealed class Drawable
 
     public string? FirstPersonModelPath { get; set; }
 
+    // Alternate models from "_2.ydd" on; "_1" is FirstPersonModelPath.
+    public List<AlternateModel> AlternateModels { get; set; } = [];
+
     // "_r" models use the ped's skin tone and pair with "_whi" textures instead of "_u" and "_uni".
     public bool Skin { get; set; }
 
@@ -85,6 +91,18 @@ public sealed class Drawable
     public GarmentSource? Source { get; set; }
 
     public bool IsProp => Prop is not null;
+
+    // The .ymt's numAlternatives: the game only switches to "_k" when k is within it.
+    public int AlternateCount() => Math.Max(FirstPersonModelPath is null ? 0 : 1, AlternateModels.Select(a => a.Alt).DefaultIfEmpty().Max());
+
+    public string? AlternateModelPath(int alt) =>
+        alt == 1 ? FirstPersonModelPath : AlternateModels.FirstOrDefault(a => a.Alt == alt)?.ModelPath;
+}
+
+public sealed class AlternateModel
+{
+    public int Alt { get; set; }
+    public required string ModelPath { get; set; }
 }
 
 // Package is the imported folder (a resource or a mod) and File the model's name inside it.
@@ -142,6 +160,9 @@ public sealed class DrawableFlags
     // The "_1" model replaces the garment in first person. Packs like EUP use it only through
     // pedalternatevariations switches instead, and then it must not be declared for first person.
     public bool AlternateInFirstPerson { get; set; } = true;
+
+    // The .ymt's propMask as imported (1 normal, 5 decal, 11 alpha…); null writes 1. Bit 0x10 always follows Skin.
+    public int? PropMask { get; set; }
 }
 
 public sealed class Tattoo

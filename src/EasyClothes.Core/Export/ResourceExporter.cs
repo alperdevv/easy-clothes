@@ -84,12 +84,15 @@ public static class ResourceExporter
                         files += Copy(projectDir, d.FirstPersonModelPath, pedStream, $"{model}_1.ydd");
                         if (d.Flags.AlternateInFirstPerson) firstPerson.Add(model.Replace('^', '/'));
                     }
+                    foreach (var alternate in d.AlternateModels)
+                        files += Copy(projectDir, alternate.ModelPath, pedStream, $"{model}_{alternate.Alt}.ydd");
                     if (d.ClothPhysicsPath is not null)
                         files += Copy(projectDir, d.ClothPhysicsPath, pedStream, $"{model}.yld");
                     items.Add(new VariationDrawable(d.Textures.Count)
                     {
                         Skin = d.Skin,
-                        FirstPerson = d.FirstPersonModelPath is not null,
+                        Alternates = d.AlternateCount(),
+                        PropMask = d.Flags.PropMask ?? 1,
                         Cloth = d.ClothPhysicsPath is not null,
                         HeelHeight = slot.Key == ComponentSlot.Shoes ? d.Flags.HeelHeight ?? 0 : 0,
                     });
@@ -108,8 +111,8 @@ public static class ResourceExporter
                     files += Copy(projectDir, ordered[i].ModelPath, pedStream, $"{prefix}_{i:000}.ydd");
                     for (var t = 0; t < ordered[i].Textures.Count; t++)
                         files += Copy(projectDir, ordered[i].Textures[t].TexturePath, pedStream, $"{prefix}_diff_{i:000}_{TextureVariation.LetterFor(t)}.ytd");
-                    if (ordered[i].FirstPersonModelPath is not null || ordered[i].ClothPhysicsPath is not null)
-                        warnings.Add($"{ordered[i].Name}: los accesorios no admiten modelo de primera persona ni físicas de tela; se exporta sin ellos.");
+                    if (ordered[i].AlternateCount() > 0 || ordered[i].ClothPhysicsPath is not null)
+                        warnings.Add($"{ordered[i].Name}: los accesorios no admiten modelos alternativos ni físicas de tela; se exporta sin ellos.");
                 }
                 props[slot.Key] = ordered.Select(d => new VariationDrawable(d.Reserved ? 1 : d.Textures.Count)
                 {
@@ -131,7 +134,8 @@ public static class ResourceExporter
             }
 
             var shopMeta = $"{ped}_{collection}.meta";
-            SaveXml(ShopMeta(gender, collection, creature), Path.Combine(dir, shopMeta));
+            (List<XElement>, List<XElement>)? entries = project.ShopEntries ? ShopEntries(gender, collection, drawables) : null;
+            SaveXml(ShopMeta(gender, collection, creature, entries), Path.Combine(dir, shopMeta));
             dataFiles.Add(("SHOP_PED_APPAREL_META_FILE", shopMeta));
             files++;
         }
@@ -245,7 +249,7 @@ public static class ResourceExporter
         document.Save(writer);
     }
 
-    private static XDocument ShopMeta(PedGender gender, string collection, string? creatureMetadata) => new(
+    private static XDocument ShopMeta(PedGender gender, string collection, string? creatureMetadata, (List<XElement> Components, List<XElement> Props)? entries) => new(
         new XDeclaration("1.0", "UTF-8", null),
         new XElement("ShopPedApparel",
             new XElement("pedName", PedSlotNames.PedModel(gender)),
@@ -254,8 +258,68 @@ public static class ResourceExporter
             new XElement("eCharacter", gender == PedGender.Male ? "SCR_CHAR_MULTIPLAYER" : "SCR_CHAR_MULTIPLAYER_F"),
             creatureMetadata is null ? null : new XElement("creatureMetaData", creatureMetadata),
             new XElement("pedOutfits"),
-            new XElement("pedComponents"),
-            new XElement("pedProps")));
+            new XElement("pedComponents", entries?.Components),
+            new XElement("pedProps", entries?.Props)));
+
+    // One shop item per garment and texture, as packs like EUP list them; reserved numbers get none.
+    private static (List<XElement> Components, List<XElement> Props) ShopEntries(PedGender gender, string collection, IReadOnlyList<Drawable> drawables)
+    {
+        var suffix = gender == PedGender.Male ? "M" : "F";
+        var components = new List<XElement>();
+        var props = new List<XElement>();
+        foreach (var slot in drawables.GroupBy(d => (d.Component, d.Prop)).OrderBy(g => g.Key.Prop is not null).ThenBy(g => (int?)g.Key.Component ?? (int)g.Key.Prop!.Value))
+        {
+            var ordered = ClothingProject.InGameOrder(slot);
+            var code = slot.Key.Component is { } c ? PedSlotNames.FileCode(c) : PedSlotNames.FileCode(slot.Key.Prop!.Value);
+            for (var i = 0; i < ordered.Count; i++)
+            {
+                if (ordered[i].Reserved) continue;
+                for (var t = 0; t < ordered[i].Textures.Count; t++)
+                {
+                    var name = $"CLO_{collection}_{code.Replace("_", "")}_{i}_{t}_{suffix}".ToUpperInvariant();
+                    if (slot.Key.Component is not null)
+                        components.Add(ShopItem(name, false,
+                            new XElement("drawableIndex", new XAttribute("value", i)),
+                            new XElement("localDrawableIndex", new XAttribute("value", i)),
+                            new XElement("eCompType", "PV_COMP_" + code.ToUpperInvariant()),
+                            new XElement("textureIndex", new XAttribute("value", t))));
+                    else
+                        props.Add(ShopItem(name, true,
+                            new XElement("propIndex", new XAttribute("value", i)),
+                            new XElement("localPropIndex", new XAttribute("value", i)),
+                            new XElement("eAnchorPoint", AnchorName(slot.Key.Prop!.Value)),
+                            new XElement("textureIndex", new XAttribute("value", t))));
+                }
+            }
+        }
+        return (components, props);
+    }
+
+    private static XElement ShopItem(string name, bool prop, params XElement[] indices) => new("Item",
+        new XElement("lockHash"),
+        new XElement("cost", new XAttribute("value", 0)),
+        new XElement("textLabel"),
+        new XElement("uniqueNameHash", name),
+        new XElement("eShopEnum", "CLO_SHOP_NONE"),
+        new XElement("locate", new XAttribute("value", -99)),
+        new XElement("scriptSaveData", new XAttribute("value", 0)),
+        new XElement("restrictionTags"),
+        new XElement("forcedComponents"),
+        prop ? new XElement("forcedProps") : null,
+        new XElement("variantComponents"),
+        prop ? new XElement("variantProps") : null,
+        indices,
+        new XElement("isInOutfit", new XAttribute("value", "false")));
+
+    private static string AnchorName(PropSlot slot) => slot switch
+    {
+        PropSlot.Hat => "ANCHOR_HEAD",
+        PropSlot.Glasses => "ANCHOR_EYES",
+        PropSlot.Ears => "ANCHOR_EARS",
+        PropSlot.Watch => "ANCHOR_LEFT_WRIST",
+        PropSlot.Bracelet => "ANCHOR_RIGHT_WRIST",
+        _ => throw new ArgumentOutOfRangeException(nameof(slot), slot, null),
+    };
 
     // Asset names are "<ped>_<collection>/<model>"; alternate 1 is the "_1.ydd" streamed next to the model.
     public const string FirstPersonDataFileType = "PED_FIRST_PERSON_ALTERNATE_DATA";

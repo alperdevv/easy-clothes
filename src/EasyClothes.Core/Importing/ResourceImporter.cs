@@ -105,6 +105,9 @@ public static class ResourceImporter
                         warnings.Add($"{Path.GetFileName(model.Asset.Path)}: el .ymt declara {items[i].Textures} texturas y solo hay {maps.Count}.");
                     var drawable = DrawableImporter.Create(project, projectDir, model.Asset.Path, model.Name, variation.Gender, maps, package, warnings);
                     drawable.Skin |= items[i].Skin;
+                    drawable.Flags.PropMask = items[i].PropMask | (items[i].Skin ? 0x10 : 0);
+                    if (items[i].Alternates > drawable.AlternateCount())
+                        warnings.Add($"{Path.GetFileName(model.Asset.Path)}: el .ymt declara {items[i].Alternates} modelos alternativos y solo hay {drawable.AlternateCount()} (_k.ydd junto al modelo).");
                     // A resource uses its "_1" models in first person only where its own .meta says so.
                     drawable.Flags.AlternateInFirstPerson = firstPerson.Contains(Path.GetFileNameWithoutExtension(model.Asset.Path).Replace('^', '/'));
                     drawable.Flags.HeelHeight = items[i].HeelHeight > 0 ? items[i].HeelHeight : null;
